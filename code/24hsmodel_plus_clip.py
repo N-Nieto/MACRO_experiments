@@ -1,0 +1,165 @@
+# %%
+import matplotlib.pyplot as plt         # noqa
+import pandas as pd                     # noqa
+import seaborn as sbn                    # noqa
+import numpy as np
+import random
+from CULPRIT_project.code.lib.ml_utils import load_CULPRIT_data, get_data_from_features
+from CULPRIT_project.code.lib.ml_utils import compute_results_by_fold
+from CULPRIT_project.code.lib.ml_utils import get_features, get_inner_loop_predictions_df
+from sklearn.model_selection import RepeatedStratifiedKFold
+from CULPRIT_project.code.lib.ml_utils import compute_results_several_ths
+# %%
+data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
+
+# endpoint to use
+endpoint_to_use = "fu_ce_death_le30d_yn"    # or "fu_ce_death_le365d_yn"
+
+# Get different features depending on the model
+# Get all data
+patient_info, lab_info, clip_info = load_CULPRIT_data(data_dir)
+# Set target
+y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
+
+# Extract all the 24hs available features
+exp_name = "24hs_CLIP"
+patient_features, lab_features, clip_features = get_features(exp_name)
+
+X_final_24, features_24 = get_data_from_features(patient_info, lab_info,
+                                                 clip_info,
+                                                 patient_features,
+                                                 lab_features,
+                                                 clip_features)
+
+X_24 = X_final_24.drop(columns="patient_ID")
+
+# Show the feature distribution
+print("24hs features: " + str(X_24.columns.nunique()))
+Y = y.iloc[:, 1].to_numpy()
+# %%
+
+# Set random state
+random_state = 23
+# Validation percentage for XGBoost early stopping
+val_percentage_xgb = 0.33
+
+out_n_splits = 10
+out_n_repetitions = 10
+kf_out = RepeatedStratifiedKFold(n_splits=out_n_splits,
+                                 n_repeats=out_n_repetitions,
+                                 random_state=random_state)
+
+inner_n_splits = 10
+inner_n_repetitions = 1
+kf_inner = RepeatedStratifiedKFold(n_splits=inner_n_splits,
+                                   n_repeats=inner_n_repetitions,
+                                   random_state=random_state)
+metric = "error"
+
+early_stopping_rounds = 250
+reg_lambda = 0
+reg_alpha = 0
+params_24hs = {
+    'initial_n_estimators': 1000,
+    'val_percentage': val_percentage_xgb,
+    'eval_metric': metric,
+    'random_state': random_state,
+    'early_stopping_rounds': early_stopping_rounds,
+    'reg_alpha': reg_alpha,
+    'reg_lambda': reg_lambda,
+}
+
+
+# Logistic regression
+thr = 0.5
+random_permutation = [False]
+random_permutation_number = 1
+
+n_participants = X_24.shape[0]
+n_features_24 = X_24.shape[1]
+
+# Initialize variables
+model_admission_cv_preds = np.ones(n_participants) * -1
+model_24hs_cv_preds = np.ones(n_participants) * -1
+cascade_norisk_model_cv_preds = np.ones(n_participants) * -1
+cascade_risk_model_cv_preds = np.ones(n_participants) * -1
+
+results_by_fold = []
+results_by_ths = []
+results_estimators = []
+
+# number of thresholds used
+ths_range = list(np.linspace(0, 1, 101))
+
+# Outer loop
+for rs in random_permutation:
+    print("Randoms State: " + str(rs))
+    for i_fold, (train_index, test_index) in enumerate(kf_out.split(X_24, Y)):       # noqa
+        print("FOLD: " + str(i_fold))
+        if rs:
+            rnd_permutation_loop = random_permutation_number
+        else:
+            rnd_permutation_loop = 1
+
+        for rpn in range(rnd_permutation_loop):
+            print("Random Permutation Nº: " + str(rpn))
+            # Patients used for train and internal XGB validation
+            X_train_whole_24 = X_24.iloc[train_index, :]
+            Y_train_whole = Y[train_index]
+
+            if rs:
+                random.shuffle(Y_train_whole)
+
+            # Patients used to generete a prediction
+            X_test_24 = X_24.iloc[test_index, :]
+            Y_test = Y[test_index]
+
+            print("Fitting 24hs model")
+            model_24hs = get_inner_loop_predictions_df(X_train_whole_24,
+                                                       Y_train_whole,
+                                                       kf_inner,
+                                                       params_24hs)
+
+            pred_test_24hs = model_24hs["model"].predict_proba(X_test_24)[:, 1]
+            # Compute metrics
+            results_by_fold = compute_results_by_fold(i_fold, "24hs_CLIP", rs, rpn, pred_test_24hs, Y_test, thr, results_by_fold)                                                        # noqa
+
+            # compute the metrics with different thresholds
+            # only when true labels are used
+            if not rs:
+                results_by_ths = compute_results_several_ths(i_fold, "24hs_CLIP", pred_test_24hs, Y_test, ths_range, results_by_ths)                                                # noqa
+
+
+results_df = pd.DataFrame(results_by_fold, columns=["Fold",
+                                                    "Model",
+                                                    "Random State",
+                                                    "Random Permutation",
+                                                    "Balanced ACC",
+                                                    "AUC",
+                                                    "F1",
+                                                    "Specificity",
+                                                    "Sensitivity"])
+
+results_ths_df = pd.DataFrame(results_by_ths, columns=["Fold",
+                                                       "Model",
+                                                       "Threshold",
+                                                       "Balanced ACC",
+                                                       "AUC",
+                                                       "F1",
+                                                       "Specificity",
+                                                       "Sensitivity"])
+
+results_estimators = pd.DataFrame(results_estimators, columns=["Fold",
+                                                               "Model",
+                                                               "Random State",
+                                                               "Random Permutation",       # noqa
+                                                               "Number of Estimators"])    # noqa    
+# % Savng results
+print("Saving Results")
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/10x10/"
+results_df.to_csv(save_dir+ "metrics_10x10_true_and_random_labels_FINAL.csv")   # noqa
+results_estimators.to_csv(save_dir+ "estimators_10x10_true_and_random_labels_FINAL.csv")   # noqa
+results_ths_df.to_csv(save_dir + "threshold_10x10_all_models_FINAL.csv")   # noqa
+print("Experiment done")
+
+# %%
