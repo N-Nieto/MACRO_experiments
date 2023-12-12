@@ -1,7 +1,7 @@
 # %%
 import pandas as pd
 import random
-from sklearn.linear_model import LogisticRegressionCV
+from sklearn.linear_model import LogisticRegression
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
 from lib.experiment_definitions import get_features
 from lib.ml_utils import compute_results_by_fold
@@ -72,7 +72,7 @@ kf_inner = StratifiedKFold(n_splits=inner_n_splits,
                            random_state=random_state)
 
 
-score_clf = LogisticRegressionCV(cv=kf_inner)
+score_clf = LogisticRegression()
 
 results_by_fold = []
 
@@ -159,7 +159,7 @@ results_df = pd.DataFrame(results_by_fold, columns=["Fold",
 # % Savng results
 print("Saving Results")
 save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/10x10/v2/"
-results_df.to_csv(save_dir+ "metrics_10x10_true_and_random_labels_scores_v2.csv")   # noqa
+results_df.to_csv(save_dir+ "metrics_10x10_true_and_random_labels_scores_v3.csv")   # noqa
 print("Experiment done")
 
 # %%

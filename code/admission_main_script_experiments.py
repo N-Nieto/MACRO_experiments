@@ -7,7 +7,7 @@ from lib.data_processing import remove_low_variance_features
 from lib.experiment_definitions import get_features
 from lib.ml_utils import compute_results_by_fold, get_inner_loop_predictions_df
 from sklearn.model_selection import RepeatedStratifiedKFold
-from lib.ml_utils import compute_results_several_ths, return_best_model # noqa
+from lib.ml_utils import compute_results_several_ths, save_best_model_params
 # %%
 # ##################### Parameters setting
 data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
@@ -128,7 +128,7 @@ for rs in random_permutation:
             results_by_fold = compute_results_by_fold(i_fold, "Admission", rs, rpn, admission_test_pred, Y_test, thr, results_by_fold)              # noqa
             # Compute train metrics
             results_by_fold = compute_results_by_fold(i_fold, "Admission_Train",rs, rpn, admission_train_pred, Y_train_whole, thr, results_by_fold)                                               # noqa
-            # results_estimators = return_best_model(i_fold, "Admission", admision_model, rs, rpn, results_estimators)                                 # noqa
+            results_estimators = save_best_model_params(i_fold, "Admission", admision_model, rs, rpn, results_estimators)                                 # noqa
 
             # compute the metrics with different thresholds
             # only when true labels are used

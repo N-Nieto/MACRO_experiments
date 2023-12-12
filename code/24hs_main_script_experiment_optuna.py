@@ -49,7 +49,7 @@ endpoint_to_use = "fu_ce_death_le30d_yn"    # or "fu_ce_death_le365d_yn"
 patient_info = load_CULPRIT_data(data_dir)
 
 # Removing patients that died in the first 24hs
-# patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
+patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
 
 # Set target
 y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
