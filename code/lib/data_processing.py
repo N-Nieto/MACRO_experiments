@@ -73,7 +73,8 @@ def remove_low_variance_features(data: pd.DataFrame,
 
 
 def naming_for_shap(data_dir: str, data: pd.DataFrame) -> pd.DataFrame:
-    """ # noqa
+    """
+    # noqa
     Rename columns of a DataFrame based on a mapping provided in an Excel file.
 
     Parameters:
@@ -121,7 +122,8 @@ def remove_random_features_fix_number(df: pd.DataFrame,
                                       features_num: int,
                                       basic_features: list = []
                                       ) -> pd.DataFrame:
-    """ # noqa
+    """
+    # noqa
     Remove the same number of features from the DataFrame for each row randomly,
     leaving the values of basic_features unchanged.
 
