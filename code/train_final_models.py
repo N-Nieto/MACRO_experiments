@@ -1,6 +1,7 @@
 # %% imports
 import joblib
 import shap
+import pickle
 import pandas as pd
 from xgboost import XGBClassifier
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
@@ -15,6 +16,7 @@ estimators_admission = estimators[estimators["Model"] == "Admission"]
 # Get only the estimators for the fit with No Shaffled data
 estimators_admission = estimators_admission[estimators_admission["Random State"] == False]          # noqa
 
+estimators = pd.read_csv(estimators_dir + "Best_Full_model_parameters_v3.csv")            # noqa
 # Get the estimators for the 24hs model
 estimators_Full = estimators[estimators["Model"] == "Full"]
 # Get only the estimators for the fit with No Shaffled data
@@ -110,8 +112,26 @@ explainer_admission = shap.Explainer(final_admission_model)
 explainer_full = shap.Explainer(final_24hs_model)
 
 # # Save the models in the web_service direction.
-save_dir = '/home/nnieto/Nico/MODS_project/CULPRIT_project/output/web_service'    # noqa
+save_dir = '/home/nnieto/Nico/MODS_project/CULPRIT_project/output/web_service/'    # noqa
 joblib.dump(final_admission_model, save_dir + 'Admission_model.pkl')
 joblib.dump(final_24hs_model, save_dir + 'Full_model.pkl')
 
+# %%
+
+# Create the SHAP explainer
+explainer_admission = shap.Explainer(final_admission_model)
+explainer_Full = shap.Explainer(final_24hs_model)
+
+# Save the explainer
+joblib.dump(explainer_admission, save_dir + "Admission_explainer.pkl")
+joblib.dump(explainer_Full, save_dir + "Full_explainer.pkl")
+
+# %%
+# Save the explainer
+with open("explainer_admission.pkl", "wb") as f:
+    pickle.dump(explainer_admission, f)
+
+# %%
+with open("explainer_admission.pkl", "wb") as f:
+    explainer_admission.save(f)
 # %%

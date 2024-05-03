@@ -4,7 +4,7 @@ import random
 from sklearn.linear_model import LogisticRegression
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
 from lib.experiment_definitions import get_features
-from lib.ml_utils import compute_results_by_fold
+from lib.ml_utils import compute_results
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 # %%
 data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
@@ -70,7 +70,6 @@ kf_out = RepeatedStratifiedKFold(n_splits=out_n_splits,
 kf_inner = StratifiedKFold(n_splits=inner_n_splits,
                            shuffle=True,
                            random_state=random_state)
-
 
 score_clf = LogisticRegression()
 
@@ -141,9 +140,9 @@ for rs in random_permutation:
             CLIP_SCORE_proba = score_clf.predict_proba(X=X_test_CLIP_SCORE)[:, 1]                    # noqa
 
             # Store results
-            results_by_fold = compute_results_by_fold(i_fold, "SAPS_SCORE", rs, rpn, SAPS_SCORE_proba, Y_test_SAPS, thr, results_by_fold)                                           # noqa
-            results_by_fold = compute_results_by_fold(i_fold, "IABP_SCORE", rs, rpn, IABP_SCORE_proba, Y_test_IABP, thr, results_by_fold)                                           # noqa
-            results_by_fold = compute_results_by_fold(i_fold, "CLIP_SCORE", rs, rpn, CLIP_SCORE_proba, Y_test_CLIP, thr, results_by_fold)                                           # noqa
+            results_by_fold = compute_results(i_fold, "SAPS_SCORE", rs, rpn, SAPS_SCORE_proba, Y_test_SAPS, thr, results_by_fold)                                           # noqa
+            results_by_fold = compute_results(i_fold, "IABP_SCORE", rs, rpn, IABP_SCORE_proba, Y_test_IABP, thr, results_by_fold)                                           # noqa
+            results_by_fold = compute_results(i_fold, "CLIP_SCORE", rs, rpn, CLIP_SCORE_proba, Y_test_CLIP, thr, results_by_fold)                                           # noqa
 
 
 results_df = pd.DataFrame(results_by_fold, columns=["Fold",

@@ -17,8 +17,8 @@ data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_J
 variance_ths = 0.10
 # Set random state
 random_state = 23
-random_permutation = [False]
-random_permutation_number = 1
+rs = False        # Random State
+rpn = 0           # Random Permutation Number
 
 # Cross validation parameters
 out_n_splits = 10
@@ -111,93 +111,82 @@ results_training = []
 results_estimators = []
 
 predictions_full = []
-predictions_MAPIE = []
 y_true_loop = []
 
+for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # noqa
+    print("FOLD: " + str(i_fold))
 
-for rs in random_permutation:
-    print("Randoms State: " + str(rs))
-    for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # noqa
-        print("FOLD: " + str(i_fold))
-        if rs:
-            rnd_permutation_loop = random_permutation_number
-        else:
-            rnd_permutation_loop = 1
+    # Patients used for train and internal XGB validation
+    X_train_whole = X.iloc[train_index, :]
+    Y_train_whole = Y[train_index]
 
-        for rpn in range(rnd_permutation_loop):
-            print("Random Permutation Nº: " + str(rpn))
+    # Patients used to generete a prediction
+    X_test = X.iloc[test_index, :]
+    Y_test = Y[test_index]
 
-            # Patients used for train and internal XGB validation
-            X_train_whole = X.iloc[train_index, :]
-            Y_train_whole = Y[train_index]
+    print("Fitting Full model")
+    # Train the model with all the features
+    full_model = get_inner_loop_optuna(X_train_whole,
+                                       Y_train_whole,
+                                       kf_inner,
+                                       params_optuna)
 
-            # Patients used to generete a prediction
-            X_test = X.iloc[test_index, :]
-            Y_test = Y[test_index]
+    # Get probability
+    pred_test = full_model["model"].predict_proba(X_test)[:, 1]
 
-            print("Fitting Full model")
-            # Train the model with all the features
-            full_model = get_inner_loop_optuna(X_train_whole,
-                                               Y_train_whole,
-                                               kf_inner,
-                                               params_optuna)
+    pred_train = full_model["model"].predict_proba(X_train_whole)[:, 1]     # noqa                
+    # Compute test metrics
+    results_training = compute_results(i_fold, "Full Train",
+                                       pred_train,
+                                       Y_train_whole, results_training,
+                                       ths_range=ths_range,
+                                       rs=rs, rpn=rpn)
 
-            # Get probability
-            pred_test = full_model["model"].predict_proba(X_test)[:, 1]
+    # Compute train metrics
+    results_estimators = save_best_model_params(i_fold, "Full",
+                                                full_model,
+                                                results_estimators,
+                                                rs=rs, rpn=rpn)
+    # Compute metrics
+    predictions_full.append(pred_test)
+    y_true_loop.append(Y_test)                                                        # noqa
 
-            pred_train = full_model["model"].predict_proba(X_train_whole)[:, 1]     # noqa                
-            # Compute test metrics
-            results_training = compute_results(i_fold, "Full Train",
-                                               pred_train,
-                                               Y_train_whole, results_training,
-                                               ths_range=ths_range,
-                                               rs=rs, rpn=rpn)
+    # Compute metrics without removing any feature
+    results_direct = compute_results(i_fold, "Full", pred_test, Y_test, results_direct, ths_range=ths_range, rs=rs, rpn=rpn)                 # noqa
+    results_inverse = compute_results(i_fold, "Full", pred_test, Y_test, results_inverse, ths_range=ths_range, rs=rs, rpn=rpn)                  # noqa
+    results_randomly = compute_results(i_fold, "Full", pred_test, Y_test, results_randomly, ths_range=ths_range, rs=rs, rpn=rpn)                  # noqa
 
-            # Compute train metrics
-            results_estimators = save_best_model_params(i_fold, "Full",
-                                                        full_model,
-                                                        results_estimators,
-                                                        rs=rs, rpn=rpn)
-            # Compute metrics
-            predictions_full.append(pred_test)
-            y_true_loop.append(Y_test)                                                        # noqa
+    # Direct importance removal
+    X_test_loop = X_test.copy()
+    for i_features, feature_name in enumerate(direct_removal):
+        # Remove feature from the test
+        X_test_loop.loc[:, feature_name] = np.nan
+        # Generate a prediction with the new test data
+        pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]           # noqa
+        # Compute metrics
+        results_direct = compute_results(i_fold, "Full", pred_test, Y_test, results_direct, n_removed_features=i_features+1, ths_range=ths_range, rs=rs, rpn=rpn)                  # noqa
 
-            # Compute metrics without removing any feature
-            results_direct = compute_results(i_fold, "Full", pred_test, Y_test, results_direct, ths_range=ths_range, rs=rs, rpn=rpn)                 # noqa
-            results_inverse = compute_results(i_fold, "Full", pred_test, Y_test, results_inverse, ths_range=ths_range, rs=rs, rpn=rpn)                  # noqa
-            results_randomly = compute_results(i_fold, "Full", pred_test, Y_test, results_randomly, ths_range=ths_range, rs=rs, rpn=rpn)                  # noqa
+    # Inverse importance removal
+    X_test_loop = X_test.copy()
+    for i_features, feature_name in enumerate(inverse_removal):
+        # Remove feature from the test
+        X_test_loop.loc[:, feature_name] = np.nan
+        # Generate a prediction with the new test data
+        pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]           # noqa
+        # Compute metrics
+        results_inverse = compute_results(i_fold, "Full", pred_test, Y_test, results_inverse, n_removed_features=i_features+1, ths_range=ths_range, rs=rs, rpn=rpn)                # noqa
 
-            # Direct importance removal
-            X_test_loop = X_test.copy()
-            for i_features, feature_name in enumerate(direct_removal):
-                # Remove feature from the test
-                X_test_loop.loc[:, feature_name] = np.nan
-                # Generate a prediction with the new test data
-                pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]           # noqa
-                # Compute metrics
-                results_direct = compute_results(i_fold, "Full", pred_test, Y_test, results_direct, n_removed_features=i_features+1, ths_range=ths_range, rs=rs, rpn=rpn)                  # noqa
-
-            # Inverse importance removal
-            X_test_loop = X_test.copy()
-            for i_features, feature_name in enumerate(inverse_removal):
-                # Remove feature from the test
-                X_test_loop.loc[:, feature_name] = np.nan
-                # Generate a prediction with the new test data
-                pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]           # noqa
-                # Compute metrics
-                results_inverse = compute_results(i_fold, "Full", pred_test, Y_test, results_inverse, n_removed_features=i_features+1, ths_range=ths_range, rs=rs, rpn=rpn)                # noqa
-
-            # Randomly removal with probability
-            X_test_loop = X_test.copy()
-            # Randomply remove
-            for i_features, feature_name in enumerate(inverse_removal):
-                # Store 24hs predictions
-                X_test_maked = remove_random_features_fix_number(X_test_loop,
-                                                                    features_num=i_features+1,                   # noqa
-                                                                    basic_features=feature_admission)         # noqa
-                pred_test = full_model["model"].predict_proba(X_test_maked)[:, 1]                     # noqa
-                # Compute metrics
-                results_randomly = compute_results(i_fold, "Full", pred_test, Y_test, results_randomly, n_removed_features=i_features+1, ths_range=ths_range, rs=rs, rpn=rpn)                # noqa
+    # Randomly removal with probability
+    X_test_loop = X_test.copy()
+    # Randomply remove
+    for i_features, feature_name in enumerate(inverse_removal):
+        # Store 24hs predictions
+        X_test_maked = remove_random_features_fix_number(X_test_loop,
+                                                            features_num=i_features+1,                   # noqa
+                                                            basic_features=feature_admission)         # noqa
+        pred_test = full_model["model"].predict_proba(X_test_maked)[:, 1]                     # noqa
+        # Compute metrics
+        results_randomly = compute_results(i_fold, "Full", pred_test, Y_test, results_randomly, n_removed_features=i_features+1, ths_range=ths_range, rs=rs, rpn=rpn)                # noqa
 
 # Create a dataframe to save
 results_randomly_df = results_to_df(results_randomly)
@@ -221,19 +210,19 @@ results_estimators = pd.DataFrame(results_estimators, columns=["Fold",
 # % Savng results
 print("Saving Results")
 save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/big_experiment/"       # noqa
-results_randomly_df.to_csv(save_dir+ "Full_big_experiment_random_remove.csv")              # noqa
-results_direct_df.to_csv(save_dir+ "Full_big_experiment_direct_remove.csv")                    # noqa
-results_inverse_df.to_csv(save_dir+ "Full_big_experiment_inverse_remove.csv")                  # noqa
-results_training_df.to_csv(save_dir+ "Full_big_experiment_training.csv")                  # noqa
+results_randomly_df.to_csv(save_dir+ "Full_big_experiment_random_remove_v3.csv")              # noqa
+results_direct_df.to_csv(save_dir+ "Full_big_experiment_direct_remove_v3.csv")                    # noqa
+results_inverse_df.to_csv(save_dir+ "Full_big_experiment_inverse_remove_v3.csv")                  # noqa
+results_training_df.to_csv(save_dir+ "Full_big_experiment_training_v3.csv")                  # noqa
 
-results_estimators.to_csv(save_dir+ "Best_Full_model_parameters.csv")   # noqa
+results_estimators.to_csv(save_dir+ "Best_Full_model_parameters_v3.csv")   # noqa
 
 predictions_full = pd.DataFrame(predictions_full)
 predictions_full = predictions_full.T
-predictions_full.to_csv(save_dir+ "predictions_Full.csv")   # noqa
+predictions_full.to_csv(save_dir+ "predictions_Full_v3.csv")   # noqa
 
 y_true_loop = pd.DataFrame(y_true_loop)
 y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir+ "y_true_Full.csv")   # noqa
+y_true_loop.to_csv(save_dir+ "y_true_Full_v3.csv")   # noqa
 
 # %%

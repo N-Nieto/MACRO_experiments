@@ -104,15 +104,23 @@ def white_blood_count_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with harmonized White Blood Count values.
     """
+    # DEPRECABLE
     # Define conversion factors for each unit
-    unit_conversions = {
-        1: 1.0,    # 10^9/L (No conversion needed)
-        2: 1000.0,  # 10^6/mL to 10^9/L (1 10^6/mL = 1000 10^9/L)
-        3: 1e-9    # Gpt/L to 10^9/L (1 Gpt/L = 1e-9 10^9/L)
-    }
+    # unit_conversions = {
+    #     1: 1.0,    # 10^9/L (No conversion needed)
+    #     2: 1000.0,  # 10^6/mL to 10^9/L (1 10^6/mL = 1000 10^9/L)
+    #     3: 1    # Gpt/L to 10^9/L (1 Gpt/L = 1e-9 10^9/L)
+    # }
+    # data['white_cell_count'] = data.apply(lambda row:row['icu_lab_wct_x_x'] * unit_conversions[row['icu_lab_wbcunit_c']], axis=1) # noqa
 
     # Apply the unit conversions to the 'White Cell Count' column
-    data['white_cell_count'] = data.apply(lambda row:row['icu_lab_wct_x_x'] * unit_conversions[row['icu_lab_wbcunit_c']], axis=1) # noqa
+    wcc = data["icu_lab_wct_x_x"]
+    # Puts the data in a biologically range
+    wcc.loc[wcc > 1000] /= 1000
+    # Puts the data in a biologically range
+    wcc.loc[wcc > 100] /= 100
+
+    data['white_cell_count'] = wcc
 
     return data
 

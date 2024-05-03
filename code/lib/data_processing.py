@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.feature_selection import VarianceThreshold
+from typing import List
 
 
 def randomly_replace_with_nan(df: pd.DataFrame, prob: float = 0.1,
@@ -154,3 +155,29 @@ def remove_random_features_fix_number(df: pd.DataFrame,
         df.iloc[i, df.columns.isin(shuffled_features)] = np.nan
 
     return df
+
+
+# Function to round each column of X with different number of digits
+def round_columns_with_different_digits(X: np.ndarray,
+                                        rounded_digits: List[int]
+                                        ) -> np.ndarray:
+    rounded_columns = []
+    for i in range(X.shape[1]):  # Loop through each column
+        rounded_column = np.round(X[:, i], decimals=rounded_digits[i])
+        rounded_columns.append(rounded_column)
+    return np.column_stack(rounded_columns)
+
+
+# Creating Shock Groups
+def define_shock_group(row):
+
+    if row['lactate_max'] > 2 and row['doubled_creat'] == 1 or row['any_pressor'] >= 1: # noqa
+        SCAI = "C"
+    elif row['total_pressors'] > row['total_pressors_first_hour']:
+        SCAI = "D"
+    elif row['any_pressor_first_hour'] >= 2 or row['iabp'] == 1:
+        SCAI = "E"
+    else:
+        SCAI = "NO"
+
+    return SCAI

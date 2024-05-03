@@ -16,17 +16,18 @@ def get_inner_loop_optuna(X: pd.DataFrame,
                           ) -> Dict[str,
                                     Union[xgb.XGBClassifier,
                                           Dict[str, float]]]:
-    """ Get the best model with OPTUNA
-    # noqa
+    """
+    Get the best model with OPTUNA
+    
     Optimize hyperparameters using Optuna for an XGBoost model and train the final model.
-
+    # noqa
     Parameters:
         X (pd.DataFrame): The input features.
         y (pd.Series): The target variable.
         kf_inner (KFold): Inner cross-validation strategy.
 
     Returns:
-        dict: A dictionary containing the final model, best hyperparameters, and Mapie classifier.
+        dict: A dictionary containing the final model, best hyperparameters.
     """
     out = {}
 
