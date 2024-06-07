@@ -14,8 +14,6 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
 data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
 
-
-
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state
@@ -146,4 +144,3 @@ X_24.to_csv(save_dir+"X_24hs_v2.csv")
 joblib.dump(model_24hs["model"], save_dir + 'model_24hs_v2_shap_values.pkl')                     # noqa
 print("Experiment done")
 # %%
-

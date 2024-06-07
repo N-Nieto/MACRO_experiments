@@ -111,54 +111,30 @@ results_full = results_to_df(results_full)
 
 
 # %%
-# # % Saving results
-# print("Saving Results")
-# save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/eICU/full_model/"       # noqa
-# results_full.to_csv(save_dir+ "Full_performance_CULPRIT_eICU.csv")                    # noqa
-# # # Save the models in the web_service direction.
-# joblib.dump(full_model["model"], save_dir + 'Full_model.pkl')
+# % Saving results
+print("Saving Results")
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/eICU/full_model/"       # noqa
+results_full.to_csv(save_dir+ "Full_performance_CULPRIT_eICU.csv")                    # noqa
+# # Save the models in the web_service direction.
+joblib.dump(full_model["model"], save_dir + 'Full_model.pkl')
 
+predictions_full = pd.DataFrame(pred_train)
+predictions_full = predictions_full.T
+predictions_full.to_csv(save_dir+ "predictions_full.csv")   # noqa
 
-# predictions_full = pd.DataFrame(predictions_full)
-# predictions_full = predictions_full.T
-# predictions_full.to_csv(save_dir+ "predictions_Admission_imp2.csv")   # noqa
+y_true_loop = pd.DataFrame(Y)
+y_true_loop = y_true_loop.T
+y_true_loop.to_csv(save_dir+ "y_true_CULPRIT.csv")   # noqa
 
-# y_true_loop = pd.DataFrame(y_true_loop)
-# y_true_loop = y_true_loop.T
-# y_true_loop.to_csv(save_dir+ "y_true_Admission_imp2.csv")   # noqa
+predictions_full = pd.DataFrame(pred_test)
+predictions_full = predictions_full.T
+predictions_full.to_csv(save_dir+ "predictions_full.csv")   # noqa
 
-# # %%
+y_true_loop = pd.DataFrame(Y_test_eicu)
+y_true_loop = y_true_loop.T
+y_true_loop.to_csv(save_dir+ "y_true_CULPRIT.csv")   # noqa
+# %%
 
 # %%
 results_full
 # %%
-
-import seaborn as sbn
-import matplotlib.pyplot as plt
-feature = "admission_lactate"
-
-sbn.swarmplot(data=X, y=feature, hue=Y)
-# plt.plot([-.5, .5], [50,50])
-# plt.plot([-.5, .5], [100,100])
-# plt.plot([-.5, .5], [1000,1000])
-
-
-
-
-# sbn.swarmplot(data=X_eicu, y=feature, hue=Y_test_eicu)
-
-# %%
- 'admission_lactate', 'icu_lab_lact8hpci_x',
-       'icu_lab_lact16hpci_x', 'icu_lab_lact24hpci_x',
-        'pbnp', 'icu_lab_ck_x',
-       'tnt', 'creatine', 'white_cell_count', 'hematocrit', 'crp',
-       'icu_lab_inr_r', 'glucose', 'alat', 'hpe_proc_mechs_yn'],
-      dtype='object')
-
-X_eicu_corrected["creatine"] = X_eicu["creatine"] *10000
-X_eicu_corrected["icu_lab_ck_x"] = X_eicu["icu_lab_ck_x"] *10000
-X_eicu_corrected["white_cell_count"] = X_eicu["white_cell_count"] / 10
-
-
-0.5	0	0.693687	0.784466	0.661224	0.543624	0.843750	0.843750
-0.5	0	0.703055	0.795232	0.663793	0.604027	0.802083
