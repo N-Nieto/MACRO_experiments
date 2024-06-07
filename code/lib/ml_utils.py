@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import optuna
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Any
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score, recall_score
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
@@ -111,8 +111,8 @@ def compute_results(i_fold: int, model: str,
                     n_removed_features: int = 0,
                     ) -> List[List[Union[int, str, float]]]:
     """
-    Calculate evaluation metrics by fold and append results to the given list.
-    # noqa
+    Calculate evaluation metrics by fold and append results to the given list. # noqa
+    
     Parameters:
         i_fold (int): Index of the fold.
         model (str): Model name or identifier.
@@ -208,3 +208,19 @@ def save_best_model_params(i_fold: int, model_name: str,
                    model["best_params"]["max_depth"]])
 
     return result
+
+
+def estimator_to_df(results: List[List[Any]]) -> pd.DataFrame:
+    """
+    Convert results to a DataFrame.
+
+    Args:
+        results (List[List[Any]]): List containing results.
+
+    Returns:
+        pd.DataFrame: DataFrame containing results.
+    """
+    columns: List[str] = ["Fold", "Model", "Random State",
+                          "Random Permutation", "Number of Estimators",
+                          "alpha", "lambda", "eta", "max_depth"]
+    return pd.DataFrame(results, columns=columns)

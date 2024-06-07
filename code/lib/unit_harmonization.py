@@ -65,7 +65,20 @@ def lactate_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
                                                      data['icu_lab_lact24hpci_x'] * unit_conversions[2],            # noqa
                                                      data['icu_lab_lact24hpci_x'] * unit_conversions[3]))           # noqa
 
-    data['admission_lactate_filled'] = data["lac"].fillna(data["admission_lactate"])                                # noqa
+    data = lactate_in_biological_range(data, 'admission_lactate')
+    data = lactate_in_biological_range(data, 'icu_lab_lact8hpci_x')
+    data = lactate_in_biological_range(data, 'icu_lab_lact16hpci_x')
+    data = lactate_in_biological_range(data, 'icu_lab_lact24hpci_x')
+
+    return data
+
+
+def lactate_in_biological_range(data, lactate_measure):
+
+    # Puts the data in a biologically range
+    data[lactate_measure].loc[data[lactate_measure] > 1000] /= 1000
+    # Puts the data in a biologically range
+    data[lactate_measure].loc[data[lactate_measure] > 25] /= 100
 
     return data
 
@@ -104,14 +117,6 @@ def white_blood_count_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with harmonized White Blood Count values.
     """
-    # DEPRECABLE
-    # Define conversion factors for each unit
-    # unit_conversions = {
-    #     1: 1.0,    # 10^9/L (No conversion needed)
-    #     2: 1000.0,  # 10^6/mL to 10^9/L (1 10^6/mL = 1000 10^9/L)
-    #     3: 1    # Gpt/L to 10^9/L (1 Gpt/L = 1e-9 10^9/L)
-    # }
-    # data['white_cell_count'] = data.apply(lambda row:row['icu_lab_wct_x_x'] * unit_conversions[row['icu_lab_wbcunit_c']], axis=1) # noqa
 
     # Apply the unit conversions to the 'White Cell Count' column
     wcc = data["icu_lab_wct_x_x"]
@@ -143,6 +148,10 @@ def hematocrit_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
 
     # Apply the unit conversions to the 'Hematocrit' column
     data['hematocrit'] = data.apply(lambda row: row['icu_lab_hct_x_x'] * unit_conversions[row['icu_lab_hctunit_c']], axis=1)    # noqa
+    # Correct values
+    data['hematocrit'].loc[data['hematocrit'] > 100] /= 100
+    # Puts the data in a biologically range
+    data['hematocrit'].loc[1 > data['hematocrit']] *= 100
 
     return data
 

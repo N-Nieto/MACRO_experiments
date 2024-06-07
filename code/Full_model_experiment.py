@@ -6,7 +6,9 @@ from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
 from lib.experiment_definitions import get_features, get_important_features
 from lib.data_processing import remove_low_variance_features
 from lib.data_processing import remove_random_features_fix_number
-from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df, save_best_model_params       # noqa
+from lib.ml_utils import compute_results, get_inner_loop_optuna
+from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df
+
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -33,13 +35,13 @@ params_optuna = {
     'eval_metric': 'auc',
     'optuna_trials': 100,
     'random_state': random_state,
-    'max_depth_min': 2,
-    'max_depth_max': 12,
+    'max_depth_min': 1,
+    'max_depth_max': 5,
     'alpha_min': 1e-8,
-    'alpha_max': 1.0,
+    'alpha_max': 10,
     'lambda_min': 1e-8,
-    'lambda_max': 1.0,
-    'eta_min': 0.3,
+    'lambda_max': 100,
+    'eta_min': 0.1,
     'eta_max': 1,
     "early_stopping_rounds": 100,
     "num_boost_round": 10000,
@@ -92,9 +94,6 @@ kf_out = RepeatedStratifiedKFold(n_splits=out_n_splits,
 kf_inner = StratifiedKFold(n_splits=inner_n_splits,
                            shuffle=True,
                            random_state=random_state)
-
-porcentages = list(np.linspace(0, 1, 101))
-
 
 # Get features in the direct order of importance
 direct_removal = get_important_features("Full")
@@ -194,35 +193,28 @@ results_direct_df = results_to_df(results_direct)
 results_inverse_df = results_to_df(results_inverse)
 results_training_df = results_to_df(results_training)
 
-results_estimators = pd.DataFrame(results_estimators, columns=["Fold",
-                                                               "Model",
-                                                               "Random State",              # noqa
-                                                               "Random Permutation",        # noqa
-                                                               "Number of Estimators",      # noqa
-                                                               "alpha",
-                                                               "lambda",
-                                                               "eta",
-                                                               "max_depth"])    # noqa    
+
+results_estimators = estimator_to_df(results_estimators)
 
 
 # %%
 
-# % Savng results
+# % Saving results
 print("Saving Results")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/big_experiment/"       # noqa
-results_randomly_df.to_csv(save_dir+ "Full_big_experiment_random_remove_v3.csv")              # noqa
-results_direct_df.to_csv(save_dir+ "Full_big_experiment_direct_remove_v3.csv")                    # noqa
-results_inverse_df.to_csv(save_dir+ "Full_big_experiment_inverse_remove_v3.csv")                  # noqa
-results_training_df.to_csv(save_dir+ "Full_big_experiment_training_v3.csv")                  # noqa
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/full_model/corrected_lactate/"       # noqa
+results_randomly_df.to_csv(save_dir+ "Full_random_remove_strict_reg.csv")              # noqa
+results_direct_df.to_csv(save_dir+ "Full_direct_remove_strict_reg.csv")                    # noqa
+results_inverse_df.to_csv(save_dir+ "Full_inverse_remove_strict_reg.csv")                  # noqa
+results_training_df.to_csv(save_dir+ "Full_training_strict_reg.csv")                  # noqa
 
-results_estimators.to_csv(save_dir+ "Best_Full_model_parameters_v3.csv")   # noqa
+results_estimators.to_csv(save_dir+ "Best_Full_model_parameters_strict_reg.csv")   # noqa
 
 predictions_full = pd.DataFrame(predictions_full)
 predictions_full = predictions_full.T
-predictions_full.to_csv(save_dir+ "predictions_Full_v3.csv")   # noqa
+predictions_full.to_csv(save_dir+ "predictions_Full_strict_reg.csv")   # noqa
 
 y_true_loop = pd.DataFrame(y_true_loop)
 y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir+ "y_true_Full_v3.csv")   # noqa
+y_true_loop.to_csv(save_dir+ "y_true_Full_strict_reg.csv")   # noqa
 
 # %%
