@@ -3,13 +3,12 @@ from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
 from lib.experiment_definitions import get_features
 from lib.data_processing import remove_low_variance_features
 from lib.ml_utils import compute_results, results_to_df       # noqa
-from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold    # noqa
 from sklearn.linear_model import LogisticRegressionCV
 from sklearn.experimental import enable_iterative_imputer  # noqa
 from sklearn.impute import IterativeImputer
-import seaborn as sbn
-import numpy as np
 import pandas as pd
+import numpy as np
 # %%
 data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
 
@@ -56,13 +55,14 @@ kf_out = RepeatedStratifiedKFold(n_splits=out_n_splits,
                                  n_repeats=out_n_repetitions,
                                  random_state=random_state)
 
+kf_inner = StratifiedKFold(n_splits=inner_n_splits,
+                           shuffle=True,
+                           random_state=random_state)
 predictions_full = []
 y_true_loop = []
 
-import  sklearn as skl
-
 imp_mean = IterativeImputer(random_state=0)
-score_clf = LogisticRegressionCV()
+score_clf = LogisticRegressionCV(cv=kf_inner)
 
 # Outer loop
 
@@ -97,45 +97,15 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
 results_pt = results_to_df(results_by_fold)
 
 # %%
-# # % Savng results
-# print("Saving Results")
-# save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/imputed_data/"       # noqa
-# results_pt.to_csv(save_dir+ "LG_imp_elastic_data_admission.csv")              # noqa
+# % Saving results
+print("Saving Results")
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/imputed_data/"       # noqa
+results_pt.to_csv(save_dir+ "LG_imp_elastic_data_admission.csv")              # noqa
 
-# predictions_full = pd.DataFrame(predictions_full)
-# predictions_full = predictions_full.T
-# predictions_full.to_csv(save_dir+ "predictions_Admission_imp.csv")   # noqa
+predictions_full = pd.DataFrame(predictions_full)
+predictions_full = predictions_full.T
+predictions_full.to_csv(save_dir+ "predictions_Admission_imp.csv")   # noqa
 
-# y_true_loop = pd.DataFrame(y_true_loop)
-# y_true_loop = y_true_loop.T
-# y_true_loop.to_csv(save_dir+ "y_true_Admission_imp.csv")   # noqa
-
-# %%
-sbn.barplot(data=results_pt, y="Balanced ACC", x="Model")
-results_pt[results_pt["Model"] == "LG_imputed_admission_test"].mean()
-# %%
-import matplotlib.pyplot as plt
-metric_to_plot = "AUC"
-fig, ax = plt.subplots(1, 1, figsize=[20, 10])
-
-sbn.swarmplot(
-    data=results_pt,
-    x="Model", y=metric_to_plot,
-    # order=models_to_plot, 
-    dodge=False, hue="Model", ax=ax,
-    # palette=[[1, 0.1, 0.1],
-    #                                           [0.1, 0.2, 0.2],
-    #                                           [1, 0.1, 0.1],
-    #                                           [0.1, 0.2, 0.2],
-    #                                           ]
-)
-
-sbn.boxplot(
-    data=results_pt, color="w", zorder=1,
-    x="Model", y=metric_to_plot,
-    # order=models_to_plot,
-    dodge=True, ax=ax
-)
-plt.legend([])
-plt.grid()
-# %%
+y_true_loop = pd.DataFrame(y_true_loop)
+y_true_loop = y_true_loop.T
+y_true_loop.to_csv(save_dir+ "y_true_Admission_imp.csv")   # noqa
