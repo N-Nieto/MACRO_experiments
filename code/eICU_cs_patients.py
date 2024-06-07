@@ -13,6 +13,7 @@ root_dir = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-data
 # %%
 # Load all the diagnosis
 diagnosis = load_eicu_diagnosis(root_dir)
+
 # Load important patient information
 patients = load_eicu_patient_information(root_dir)
 # Merge all the data
@@ -22,12 +23,13 @@ merge_data = pd.merge(patients, diagnosis, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 del diagnosis, patients
 # %%
-# Filter the CS patients, include all not only the Cardiac ICU patients
-merge_data = eICU_filter_CS_patients(merge_data, False)
 
-# Remove duplicated patients and week only one
-# Function to keep one entry per uniquepid,
-# prioritizing endpoint=1 over endpoint=0
+# Filter the CS patients, include all not only the Cardiac ICU patients
+merge_data = eICU_filter_CS_patients(merge_data, True)
+
+# Remove duplicated patients
+# prioritizing endpoint=1 over endpoint=0      # noqa
+
 # Sort DataFrame by 'endpoint' in descending order
 merge_data = merge_data.sort_values(by='hospitaldischargestatus',
                                     ascending=False)
@@ -61,6 +63,7 @@ for col in physicalExam.columns:
     merge_data[col].fillna(0, inplace=True)
 del physicalExam
 
+# %%
 # Resusitation within 24hs
 resuscitation = load_eicu_defibrillation(root_dir)
 
@@ -82,7 +85,7 @@ merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 # If some patients don't have any of the past history fill with 0
 merge_data["dyslipidemia"].fillna(0, inplace=True)
 del dyslipidemia
-
+# %%
 # Mechanical ventilation
 mechanical_ventilation = load_eicu_mechanical_ventilation(root_dir)
 # Merge the features with the targets and information
@@ -92,7 +95,7 @@ merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 # If some patients don't have any of the past history fill with 0
 merge_data["mechanical_ventilation"].fillna(0, inplace=True)
 del mechanical_ventilation
-
+# %%
 # ST elevation
 st_elevation = load_eicu_st_segmentation(root_dir)
 # Merge the features with the targets and information
@@ -104,7 +107,12 @@ merge_data["ST_elevation"].fillna(0, inplace=True)
 del st_elevation
 # %%
 
-HR = eICU_admission_heart_function(root_dir, merge_data["patientunitstayid"])
+plausible_range = [(20, 200, "heartrate"),
+                   (20, 200, "systemicsystolic"),
+                   (20, 200, "systemicdiastolic")]
+
+HR = eICU_admission_heart_function(root_dir, plausible_range,
+                                   time_before_cut_off=30)
 merge_data = pd.merge(merge_data, HR, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 
@@ -121,8 +129,8 @@ X_admission = merge_data.drop(["patientunitstayid", "icd9code",
                                "hospitaldischargestatus"], axis=1)
 
 X_admission = admission_name_matching(X_admission)
-X_admission.to_csv("/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/X_admission.csv")   # noqa
-y_eicu.to_csv("/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/y.csv")                  # noqa
+X_admission.to_csv("/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/X_admission_CICU.csv")   # noqa
+y_eicu.to_csv("/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/y_CICU.csv")                  # noqa
 
 # %% 24 features
 
@@ -142,4 +150,8 @@ Full_model_data = merge_data.drop(["patientunitstayid", "icd9code",
                                    "hospitaldischargestatus"], axis=1)
 
 Full_model_data = full_model_name_matching(Full_model_data)
-Full_model_data.to_csv("/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/X_Full.csv")    # noqa
+Full_model_data.to_csv("/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/X_Full_CICU.csv")    # noqa
+
+# %%
+print("DONE!")
+# %%

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import joblib
 import os
 
@@ -13,27 +14,76 @@ def eICU_filter_CS_patients(data, CICU=True):
     return CS_patients
 
 
-def eICU_admission_heart_function(root_dir, selected_patients,
+def eICU_admission_heart_function(root_dir, plausible_range,
+                                  selected_patients=None,
                                   time_before_cut_off=60,
-                                  time_after_cut_off=-1440):
-    selected_patients = selected_patients.tolist()
+                                  time_after_cut_off=-1440,
+                                  prefilter=True):
+
     usecols = ["patientunitstayid", "observationoffset",
                "heartrate", "systemicsystolic", "systemicdiastolic"]
-
-    heart_data = pd.read_csv(root_dir + "vitalPeriodic.csv.gz",
-                             usecols=usecols)
-    # Keep only the CS patients for faster processing
-    heart_data = heart_data[heart_data["patientunitstayid"].isin(selected_patients)]            # noqa
+    # Load the pre-filtered data for faster processing
+    if prefilter:
+        heart_data = pd.read_csv(root_dir + "vitalPeriodic_selected_MACRO.csv.gz",                  # noqa
+                                 usecols=usecols)
+    else:
+        # Load the raw data and keep the selected patients
+        selected_patients = selected_patients.tolist()
+        heart_data = pd.read_csv(root_dir + "vitalPeriodic_selected_MACRO.csv.gz",                  # noqa
+                                 usecols=usecols)
+        # Keep only the CS patients for faster processing
+        heart_data = heart_data[heart_data["patientunitstayid"].isin(selected_patients)]            # noqa
     # Remove the data after one Hour
-    heart_data = heart_data[heart_data['observationoffset'] < time_before_cut_off]              # noqa
+    heart_data = heart_data[heart_data['observationoffset'] < time_before_cut_off]                  # noqa
     # Remove data older than one day
-    heart_data = heart_data[heart_data['observationoffset'] > time_after_cut_off]               # noqa
+    heart_data = heart_data[heart_data['observationoffset'] > time_after_cut_off]                   # noqa
     # Drop timing columne
     heart_data.drop(labels="observationoffset", axis=1, inplace=True)
+
+    # Iterate over each range in plausible_range
+    # to help removing outliers in the data
+    for min_val, max_val, column in plausible_range:
+        # Replace values outside the range with NaN for the specified column
+        heart_data[column] = heart_data[column].where((heart_data[column] >= min_val) & (heart_data[column] <= max_val), other=np.nan)      # noqa
+
     # Group the data by the median
     heart_data = heart_data.groupby("patientunitstayid").median().reset_index()
 
     return heart_data
+
+
+def eICU_aperiodic_preassure(root_dir, plausible_range,
+                             selected_patients,
+                             time_before_cut_off=30,
+                             time_after_cut_off=-1440,
+                             ):
+
+    usecols = ["patientunitstayid", "observationoffset",
+               "noninvasivesystolic", "noninvasivediastolic"]
+
+    BP = pd.read_csv(root_dir + "vitalAperiodic.csv.gz",                  # noqa
+                     usecols=usecols)
+
+    selected_patients = selected_patients.tolist()
+    # Keep only the CS patients for faster processing
+    BP = BP[BP["patientunitstayid"].isin(selected_patients)]            # noqa
+    # Remove the data after one Hour
+    BP = BP[BP['observationoffset'] < time_before_cut_off]                  # noqa
+    # Remove data older than one day
+    BP = BP[BP['observationoffset'] > time_after_cut_off]                   # noqa
+    # Drop timing columne
+    BP.drop(labels="observationoffset", axis=1, inplace=True)
+
+    # Iterate over each range in plausible_range
+    # to help removing outliers in the data
+    for min_val, max_val, column in plausible_range:
+        # Replace values outside the range with NaN for the specified column
+        BP[column] = BP[column].where((BP[column] >= min_val) & (BP[column] <= max_val), other=np.nan)      # noqa
+
+    # Group the data by the median
+    BP = BP.groupby("patientunitstayid").median().reset_index()
+
+    return BP
 
 
 # General propose functions
@@ -80,22 +130,22 @@ def group_features(data: pd.DataFrame, features_group: dict) -> pd.DataFrame:
 
 
 # Define a function to create new labname based on laboffset
-def create_new_labname(row):
+def diferent_lactate_timing(row):
     if row['labname'] == 'lactate':
-        if row['labresultoffset'] <= 450:
+        if row['labresultoffset'] <= 0:
             return 'admission_lactate'
-        elif 450 < row['labresultoffset'] <= 930:
+        elif 0 < row['labresultoffset'] <= 480:
             return 'icu_lab_lact8hpci_x'
-        elif 930 < row['labresultoffset'] <= 1410:
+        elif 480 < row['labresultoffset'] <= 960:
             return 'icu_lab_lact16hpci_x'
-        elif 1410 < row['labresultoffset'] <= 1500:
+        elif 960 < row['labresultoffset'] <= 1440:
             return 'icu_lab_lact24hpci_x'
     return row['labname']
 
 
 # eICU to CULPRIT unit Harmonize functions
 def eicu_CPK_harmonization(cpk):
-    return cpk / 666.49  # Conversion factor: 1 U/L = 0.14999 mmol/L
+    return cpk / 0.14999  # Conversion factor: 1 U/L =  mmol/L
 
 
 def eicu_Troponin_harmonization(troponin_t):
@@ -104,11 +154,9 @@ def eicu_Troponin_harmonization(troponin_t):
 
 def eicu_Creatinine_harmonization(creatinine):
     # Conversion factor: 1 microgram/dl = 0.00885 micromol/L
-    return creatinine / 113.12
-
-
-def eicu_WBC_harmonization(wbc):
-    return wbc * 10  # Conversion factor: 1 1000K/mcL = 10e9/L
+    creatinine = creatinine / 113.12
+    creatinine = creatinine * 10000
+    return creatinine
 
 
 def eicul_ALAT_harmonization(alat):

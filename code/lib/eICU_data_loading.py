@@ -2,8 +2,8 @@ import pandas as pd
 import os
 from typing import List
 from lib.eICU_processing import process_individual_features, group_features
-from lib.eICU_processing import create_new_labname, eicu_CPK_harmonization, eicu_Troponin_harmonization             # noqa
-from lib.eICU_processing import eicu_Creatinine_harmonization, eicu_WBC_harmonization, eicul_ALAT_harmonization     # noqa
+from lib.eICU_processing import diferent_lactate_timing, eicu_CPK_harmonization, eicu_Troponin_harmonization             # noqa
+from lib.eICU_processing import eicu_Creatinine_harmonization, eicul_ALAT_harmonization     # noqa
 
 
 def load_eicu_history(root_dir: str) -> pd.DataFrame:
@@ -101,6 +101,10 @@ def load_eicu_history(root_dir: str) -> pd.DataFrame:
     past_history = past_history.loc[:, selected_features]
     past_history = past_history.groupby("patientunitstayid").max().reset_index()                    # noqa
 
+    # Change sick sinus syndrom to match culprit
+    past_history["sick sinus syndrome"].replace({0: -1}, inplace=True)
+    past_history["sick sinus syndrome"].replace({1: 0}, inplace=True)
+    past_history["sick sinus syndrome"].replace({-1: 1}, inplace=True)
     # Check for uniqueness of 'patientunitstayid'
     assert past_history["patientunitstayid"].nunique() == len(past_history["patientunitstayid"])    # noqa
 
@@ -113,8 +117,8 @@ def eICU_load_physical_exam(root_dir):
 
     file_dir = os.path.join(root_dir, "physicalExam.csv.gz")
     physicalExam = pd.read_csv(file_dir, usecols=usecols)
-    # Use only information obtained in the first 10 minutes
-    physicalExam = physicalExam[physicalExam['physicalexamoffset'] <= 10]
+    # Use only information obtained in the first hour
+    physicalExam = physicalExam[physicalExam['physicalexamoffset'] <= 60]
 
     # Filter relevant features
     features_exam = ["patientunitstayid", "delusional",
@@ -225,7 +229,7 @@ def load_eicu_defibrillation(root_dir: str) -> pd.DataFrame:
                                                "treatmentstring"])
 
     # Keep only the information of the previous 24 hours
-    treatment = treatment[(treatment['treatmentoffset'] < 0) & (treatment['treatmentoffset'] > -1440)]  # noqa
+    treatment = treatment[(treatment['treatmentoffset'] < 60) & (treatment['treatmentoffset'] > -1440)]  # noqa
 
     # Define feature names
     feature_names = ["cardiovascular|arrhythmias|cardiac defibrillation",
@@ -281,7 +285,7 @@ def load_eicu_dyslipidemia(root_dir: str,
     # Keep only the selected patients for faster processing
     lab = lab[lab["patientunitstayid"].isin(selected_patients)]
 
-    # Remove data after one hour
+    # Remove data before afmission hour
     lab = lab[lab['labresultoffset'] < 0]
 
     # Define features related to lipid profile
@@ -338,8 +342,7 @@ def load_eicu_mechanical_ventilation(root_dir: str) -> pd.DataFrame:
                        usecols=usecols)
 
     # Set mechanical ventilation flag to 1 if it started before admission
-    # or in the first 10 minutes
-    vent["mechanical_ventilation"] = vent["ventstartoffset"] < 10
+    vent["mechanical_ventilation"] = vent["ventstartoffset"] < 60
 
     # Drop the ventstartoffset column as it's no longer needed
     vent.drop("ventstartoffset", axis=1, inplace=True)
@@ -374,7 +377,7 @@ def load_eicu_st_segmentation(root_dir: str) -> pd.DataFrame:
     diagnosis = diagnosis[diagnosis['diagnosisstring'].str.contains("with ST elevation")]       # noqa
 
     # Keep only the patients' diagnoses up to 10 minutes after admission
-    diagnosis["ST_elevation"] = diagnosis["diagnosisoffset"] < 10
+    diagnosis["ST_elevation"] = diagnosis["diagnosisoffset"] < 60
     diagnosis["ST_elevation"] = diagnosis["ST_elevation"].astype(int)
 
     # Group the patients
@@ -422,7 +425,7 @@ def load_eicu_24hs_features(root_dir: str) -> pd.DataFrame:
         lab[col] = lab[col] * lab["labresult"]
 
     # Apply function to create new labname column
-    lab['labname'] = lab.apply(create_new_labname, axis=1)
+    lab['labname'] = lab.apply(diferent_lactate_timing, axis=1)
 
     # Group by patientunitstayid and labname, then calculate mean labresult
     lab = lab.groupby(['patientunitstayid', 'labname'])['labresult'].mean().reset_index()           # noqa
@@ -435,34 +438,105 @@ def load_eicu_24hs_features(root_dir: str) -> pd.DataFrame:
     lab['CPK'] = lab['CPK'].apply(eicu_CPK_harmonization)
     lab['troponin - T'] = lab['troponin - T'].apply(eicu_Troponin_harmonization)                    # noqa
     lab['creatinine'] = lab['creatinine'].apply(eicu_Creatinine_harmonization)                      # noqa
-    lab['WBC x 1000'] = lab['WBC x 1000'].apply(eicu_WBC_harmonization)
     lab['ALT (SGPT)'] = lab['ALT (SGPT)'].apply(eicul_ALAT_harmonization)
 
     return lab
 
 
-def load_eicu_mechanical_support(root_dir):
+def load_eicu_mechanical_support(root_dir: str) -> pd.DataFrame:
+    """
+    Load eICU data related to mechanical support.
+
+    Args:
+        root_dir (str): Root directory containing eICU data.
+
+    Returns:
+        pd.DataFrame: DataFrame containing mechanical support data.
+    """
+    # Define columns to use
     usecols = ["patientunitstayid", "treatmentoffset", "treatmentstring"]
-    treatment = pd.read_csv(os.path.join(root_dir + "treatment.csv.gz"),
+
+    # Load treatment data
+    treatment = pd.read_csv(os.path.join(root_dir, "treatment.csv.gz"),
                             usecols=usecols)
+
+    # Keep treatments within the first 24 hours (1440 minutes)
     treatment = treatment[treatment["treatmentoffset"] < 1440]
 
-    key_workds = ["dialysis", "intraaortic balloon pump", "bypass",
-                  "mechanical ventilation"]
+    # Define keywords to identify mechanical support
+    keywords = ["intraaortic balloon pump"]
 
-    # Function to check if any word from the list is present in the string
-    def check_contains(diagnosis_str):
-        for word in key_workds:
-            if word in diagnosis_str:
+    # Function to check if any keyword is present in the treatment string
+    def check_IABP(treatment_str):
+        for keyword in keywords:
+            if keyword in treatment_str:
                 return True
         return False
-    # Filter the dataframe
-    treatment = treatment[treatment['treatmentstring'].apply(check_contains)]        # noqa
+
+    # Function to check if any keyword is present in the treatment string
+    def check_IABP_removal(treatment_str):
+        for keyword in keywords:
+            if keyword in treatment_str:
+                return False
+        return True
+
+    # Filter the dataframe based on keywords
+    treatment = treatment[treatment['treatmentstring'].apply(check_IABP)]
+
+    # Define keywords to identify mechanical support
+    keywords = ["removal"]
+    # Filter the dataframe based on keywords
+    treatment = treatment[treatment['treatmentstring'].apply(check_IABP_removal)]                   # noqa
+
+    # Create a new column indicating mechanical support presence
     treatment["hpe_proc_mechs_yn"] = 1
+
+    # Select relevant columns
     treatment = treatment.loc[:, ["patientunitstayid", "hpe_proc_mechs_yn"]]
 
-    # Group the patients
+    # Group by patientunitstayid and keep only the maximum value
     treatment = treatment.groupby("patientunitstayid").max().reset_index()
-    assert treatment["patientunitstayid"].nunique() == len(treatment["patientunitstayid"])              # noqa
+
+    # Assert uniqueness of patientunitstayid
+    assert treatment["patientunitstayid"].nunique() == len(treatment["patientunitstayid"])          # noqa
 
     return treatment
+
+
+def load_eicu_diabetes_mellitus(root_dir: str) -> pd.DataFrame:
+    """
+    Load eICU diagnosis data related to diabetes mellitus.
+
+    Args:
+        root_dir (str): Root directory containing eICU data.
+
+    Returns:
+        pd.DataFrame: DataFrame containing diabetes mellitus patients' data.
+    """
+    # Construct file path for diagnosis data
+    file_dir = os.path.join(root_dir, "diagnosis.csv.gz")
+
+    # Load diagnosis data with relevant columns
+    diagnosis = pd.read_csv(file_dir, usecols=["patientunitstayid", "icd9code",
+                                               "diagnosisoffset"])
+
+    # Keep only the diagnosis before the admission time
+    diagnosis = diagnosis[diagnosis['diagnosisoffset'] < 0]
+
+    # Drop rows with missing icd9code values
+    diagnosis.dropna(subset=["icd9code"], inplace=True)
+
+    # Extract primary icd9code from comma-separated list
+    diagnosis['icd9code'] = diagnosis['icd9code'].apply(lambda x: x.split(',')[0])                                  # noqa
+
+    # Filter patients diagnosed with diabetes mellitus (ICD-9 code: 250.00)
+    diabetes_mellitus = diagnosis[diagnosis["icd9code"] == "250.00"]
+
+    # Drop unnecessary columns
+    diabetes_mellitus.drop(columns=["diagnosisoffset", "icd9code"],
+                           inplace=True)
+
+    # Group by patientunitstayid and keep only the maximum value
+    diabetes_mellitus = diabetes_mellitus.groupby("patientunitstayid").max().reset_index()                          # noqa
+
+    return diabetes_mellitus
