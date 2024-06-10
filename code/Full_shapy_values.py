@@ -25,13 +25,13 @@ params_optuna = {
     'eval_metric': 'auc',
     'optuna_trials': 100,
     'random_state': random_state,
-    'max_depth_min': 2,
-    'max_depth_max': 12,
+    'max_depth_min': 1,
+    'max_depth_max': 5,
     'alpha_min': 1e-8,
-    'alpha_max': 1.0,
+    'alpha_max': 10,
     'lambda_min': 1e-8,
-    'lambda_max': 1.0,
-    'eta_min': 0.3,
+    'lambda_max': 100,
+    'eta_min': 0.1,
     'eta_max': 1,
     "early_stopping_rounds": 100,
     "num_boost_round": 10000,
@@ -99,6 +99,7 @@ n_participants, n_features_24 = X_24.shape
 shap_24hs_values = np.ones([n_participants, n_features_24]) * -1
 shap_24hs_baseline = np.ones(n_participants) * -1
 shap_24hs_data = np.ones([n_participants, n_features_24]) * -1
+predictions = []
 
 # Outer loop
 for i_fold, (train_index, test_index) in enumerate(kf_out.split(X_24, Y)):       # noqa
@@ -116,7 +117,8 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X_24, Y)):      
                                        Y_train_whole,
                                        kf_inner,
                                        params_optuna=params_optuna)
-
+    pred_test = model_24hs["model"].predict_proba(X_test_24)[:, 1]
+    predictions.append(pred_test)
     # Initialize variables for shaply values from 24hs
     explainer = shap.Explainer(model_24hs["model"])
     shap_values = explainer(X_test_24)
@@ -127,7 +129,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X_24, Y)):      
 
 # %% Saving
 print("Saving")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/shap_values/"              # noqa
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/full_model/shap/"              # noqa
 
 save_list = [
              [shap_24hs_values, "shap_24hs_values"],
@@ -140,6 +142,11 @@ for list_to_save, save_name in save_list:
         pickle.dump(list_to_save, fp)
 
 X_24.to_csv(save_dir+"X_24hs_v2.csv")
+y.iloc[:, 1].to_csv(save_dir+"Y_"+exp_name+".csv")
+
+predictions = pd.DataFrame(predictions)
+predictions = predictions.T
+predictions.to_csv(save_dir+ "predictions_Full_model_shap.csv")   # noqa
 
 joblib.dump(model_24hs["model"], save_dir + 'model_24hs_v2_shap_values.pkl')                     # noqa
 print("Experiment done")

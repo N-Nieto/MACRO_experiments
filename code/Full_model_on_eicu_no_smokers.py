@@ -1,5 +1,5 @@
-
 # %%
+import joblib
 import numpy as np
 import pandas as pd
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
@@ -8,8 +8,6 @@ from lib.data_processing import remove_low_variance_features
 from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df       # noqa
 from sklearn.model_selection import StratifiedKFold
 import optuna
-from sklearn.experimental import enable_iterative_imputer  # noqa
-from sklearn.impute import IterativeImputer
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
@@ -21,7 +19,7 @@ variance_ths = 0.10
 random_state = 23
 
 # Inner CV
-inner_n_splits = 3
+inner_n_splits = 5
 
 # Define the hyperparameters to tune
 params_optuna = {
@@ -63,10 +61,10 @@ Y = y.iloc[:, 1].to_numpy()
 exp_name = "24hs"
 feature_24h = get_features(exp_name)
 X = get_data_from_features(patient_info, feature_24h)
+X = X.drop(columns="p_rf_smoker_yn")
 
 # Remove low variance features
 X = remove_low_variance_features(X, variance_ths)
-X = X.drop(columns="p_rf_smoker_yn")
 
 # Final data shape
 n_participants, n_features = X.shape
@@ -75,10 +73,10 @@ n_participants, n_features = X.shape
 print("Full features: " + str(n_features))
 
 eicu_root = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
-X_eicu = pd.read_csv(eicu_root + "X_Full.csv", index_col=0)
+X_eicu = pd.read_csv(eicu_root + "X_Full_CICU.csv", index_col=0)
 X_eicu = X_eicu.drop(columns="p_rf_smoker_yn")
 
-Y_test_eicu = pd.read_csv(eicu_root + "y.csv", index_col=0)
+Y_test_eicu = pd.read_csv(eicu_root + "y_CICU.csv", index_col=0)
 Y_test_eicu = Y_test_eicu.to_numpy()
 # %%
 
@@ -87,9 +85,6 @@ kf_inner = StratifiedKFold(n_splits=inner_n_splits,
                            shuffle=True,
                            random_state=random_state)
 
-imp_mean = IterativeImputer(random_state=random_state,
-                            min_value=np.min(X, axis=0),
-                            max_value=np.max(X, axis=0), max_iter=20)
 
 results_full = []
 
@@ -104,34 +99,42 @@ full_model = get_inner_loop_optuna(X,
 X_eicu = pd.DataFrame(X_eicu, columns=X.columns)
 pred_test = full_model["model"].predict_proba(X_eicu)[:, 1]
 # Compute metrics without removing any feature
-results_full = compute_results(1, "Full test (eICU)", pred_test, Y_test_eicu, results_full)                 # noqa
+results_full = compute_results(1, "Full Test (eICU)",
+                               pred_test, Y_test_eicu, results_full)
 
-pred_train = full_model["model"].predict_proba(X)[:, 1]     # noqa                
+pred_train = full_model["model"].predict_proba(X)[:, 1]
+
 # Compute test metrics
-results_full = compute_results(1, "Full Train (CULPRIT)", pred_train, Y, results_full)                 # noqa
+results_full = compute_results(1, "Full Train (CULPRIT)",
+                               pred_train, Y, results_full)
 
-
-# Create a dataframe to save
 results_full = results_to_df(results_full)
 
+
 # %%
+# % Saving results
+print("Saving Results")
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/eICU/full_model/"       # noqa
+results_full.to_csv(save_dir+ "Full_performance_CULPRIT_eICU.csv")                    # noqa
+# # Save the models in the web_service direction.
+joblib.dump(full_model["model"], save_dir + 'Full_model_no_smokers.pkl')
 
-# # % Saving results
-# print("Saving Results")
-# save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/imputed_data/"       # noqa
-# results_direct_df.to_csv(save_dir+ "Admission_imp_big_experiment_direct_remove2.csv")                    # noqa
-# results_training_df.to_csv(save_dir+ "Admission_big_experiment_training2.csv")                  # noqa
+predictions_full = pd.DataFrame(pred_train)
+predictions_full = predictions_full.T
+predictions_full.to_csv(save_dir+ "predictions_full_CULPRIT_no_smokers.csv")   # noqa
 
+y_true_loop = pd.DataFrame(Y)
+y_true_loop = y_true_loop.T
+y_true_loop.to_csv(save_dir+ "y_true_CULPRIT_no_smokers.csv")   # noqa
 
-# predictions_full = pd.DataFrame(predictions_full)
-# predictions_full = predictions_full.T
-# predictions_full.to_csv(save_dir+ "predictions_Admission_imp2.csv")   # noqa
+predictions_full = pd.DataFrame(pred_test)
+predictions_full = predictions_full.T
+predictions_full.to_csv(save_dir+ "predictions_full_eICU_no_smokers.csv")   # noqa
 
-# y_true_loop = pd.DataFrame(y_true_loop)
-# y_true_loop = y_true_loop.T
-# y_true_loop.to_csv(save_dir+ "y_true_Admission_imp2.csv")   # noqa
-
-# # %%
+y_true_loop = pd.DataFrame(Y_test_eicu)
+y_true_loop = y_true_loop.T
+y_true_loop.to_csv(save_dir+ "y_true_eICU_no_smokers.csv")   # noqa
+# %%
 
 # %%
 results_full

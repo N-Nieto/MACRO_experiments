@@ -3,6 +3,7 @@ import pickle
 import joblib
 import shap
 import numpy as np
+import pandas as pd
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
 from lib.experiment_definitions import get_features
 from lib.data_processing import remove_low_variance_features, naming_for_shap
@@ -10,7 +11,6 @@ from lib.ml_utils import get_inner_loop_optuna
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
 # %%
 data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
 
@@ -26,6 +26,23 @@ out_n_repetitions = 1
 inner_n_splits = 3
 inner_n_repetitions = 1
 
+# Define the hyperparameters to tune
+params_optuna = {
+    "objective": "binary:logistic",
+    'eval_metric': 'auc',
+    'optuna_trials': 100,
+    'random_state': random_state,
+    'max_depth_min': 1,
+    'max_depth_max': 5,
+    'alpha_min': 1e-8,
+    'alpha_max': 10,
+    'lambda_min': 1e-8,
+    'lambda_max': 100,
+    'eta_min': 0.1,
+    'eta_max': 1,
+    "early_stopping_rounds": 100,
+    "num_boost_round": 10000,
+}
 # Model Threshold
 thr = 0.5
 # number of thresholds used
@@ -44,7 +61,7 @@ y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
 Y = y.iloc[:, 1].to_numpy()
 
 # Extract the Admmission features
-exp_name = "Admission_v2"
+exp_name = "Admission"
 features = get_features(exp_name)
 X = get_data_from_features(patient_info, features)
 
@@ -55,6 +72,7 @@ X = naming_for_shap(data_dir, X)
 # Final data shape
 n_participants = X.shape[0]
 n_features = X.shape[1]
+
 
 # Show the feature distribution
 print("Admission features: " + str(n_features))
@@ -78,6 +96,7 @@ shap_values = np.ones([n_participants, n_features]) * -1
 shap_baseline = np.ones(n_participants) * -1
 shap_data = np.ones([n_participants, n_features]) * -1
 
+predictions = []
 # Outer loop
 for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # noqa
     print("FOLD: " + str(i_fold))
@@ -92,7 +111,10 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
     print("Fitting Admission model")
     model = get_inner_loop_optuna(X_train_whole,
                                   Y_train_whole,
-                                  kf_inner)
+                                  kf_inner,
+                                  params_optuna=params_optuna)
+    pred_test = model["model"].predict_proba(X_test)[:, 1]
+    predictions.append(pred_test)
 
     # Initialize variables for shaply values from 24hs
     explainer = shap.Explainer(model["model"])
@@ -103,7 +125,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
 
 # %% Saving
 print("Saving")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/shap_values/"              # noqa
+save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/admission_model/shap/"              # noqa
 
 save_list = [
              [shap_values, "shap_values_"+exp_name],
@@ -115,7 +137,12 @@ for list_to_save, save_name in save_list:
     with open(save_dir+save_name, "wb") as fp:   # Pickling
         pickle.dump(list_to_save, fp)
 
-X.to_csv(save_dir+"X_"+exp_name+"_v2.csv")
+X.to_csv(save_dir+"X_"+exp_name+".csv")
+y.iloc[:, 1].to_csv(save_dir+"Y_"+exp_name+".csv")
+
+predictions = pd.DataFrame(predictions)
+predictions = predictions.T
+predictions.to_csv(save_dir+ "predictions_Admission_shap.csv")   # noqa
 
 joblib.dump(model["model"], save_dir + 'model_'+exp_name+'_shap_values.pkl')                     # noqa
 print("Experiment done")

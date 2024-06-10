@@ -50,7 +50,7 @@ def get_features(exp_name: str) -> List[str]:
                         "had_base_cpr24h_yn"        # 25 Resuscitation within 24 hs before admission                                        # noqa
                         ]
 
-    if exp_name == "24hs":
+    elif exp_name == "24hs":
         # Baseline Model features
         features_list = [
                         # Admission Features
@@ -114,6 +114,35 @@ def get_features(exp_name: str) -> List[str]:
                         "ventricular_fibrillation",     # 44 Ventricular fib
                         "stroke",                       # 45 Stroke
                          ]
+
+    elif exp_name == "Admission_less_features":
+        # Baseline Model features
+        features_list = [
+                        # Patient Information
+                        "had_dem_age_yr",           # 1 Age
+                        "had_pex_weight_kg",        # 3 Weight
+                        "had_pex_height_cm",        # 4 Height
+
+                        # Comorbilities
+                        "p_mh_hfail_yn",            # 6  Previous congestive heart                                                          # noqa
+                        "p_mh_stroke_yn",           # 7  Previous stroke
+                        "p_mh_renf_yn",             # 9  Known renal insufficiency (GFR < 30 ml/min)                                        # noqa
+                        "p_mh_dial_yn",             # 10 Chronic dialysis
+                        "p_rf_smoker_yn",           # 11 Current smoking
+                        "p_rf_dyslip_yn",           # 13 Dyslipidemia
+                        "p_rf_dm_yn",               # 14 Diabetes mellitus
+
+                        # ECG
+                        "hpr_ecg_sinrhy_y",         # 15 Sinus rhythm
+                        "hpr_ecg_avblock3_y",       # 17 AV-block III
+
+                        # Clinical shock characteristics
+                        "hpr_hmdyn_hr_bpm",         # 19 Heart rate [bpm]
+                        "hpr_hmdyn_sbp_mmhg",       # 20 Systolic blood pressure                                                            # noqa
+                        "hpr_hmdyn_dbp_mmhg",       # 21 Diastolic blood pressure                                                           # noqa
+                        "had_sy_ams_yn",            # 22 Altered mental status
+                        "had_base_mechvent_yn",     # 24 Mechanical ventilation
+                        ]
     elif exp_name == "CLIP_SCORE":
         features_list = ["CLIP_Score",
                          ]
@@ -181,6 +210,21 @@ def get_important_features(exp_name: str) -> List[str]:
                          "hpe_proc_mechs_yn",
                          "alat",
                          "icu_lab_ck_x"
+                         ]
+
+    if exp_name == "Admission_less_features":
+        # Direct order of importance
+        features_list = ["p_rf_dyslip_yn",
+                         "hpr_hmdyn_hr_bpm",
+                         "hpr_hmdyn_dbp_mmhg",
+                         "had_sy_ams_yn",
+                         "hpr_ecg_sinrhy_y",
+                         "had_pex_height_cm",
+                         "p_rf_smoker_yn",
+                         "had_base_mechvent_yn",
+                         "p_rf_dm_yn",
+                         "had_pex_weight_kg",
+                         "hpr_hmdyn_sbp_mmhg",
                          ]
     else:
         RuntimeError("Experiment not set")
