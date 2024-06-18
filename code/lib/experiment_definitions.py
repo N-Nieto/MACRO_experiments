@@ -143,6 +143,7 @@ def get_features(exp_name: str) -> List[str]:
                         "had_sy_ams_yn",            # 22 Altered mental status
                         "had_base_mechvent_yn",     # 24 Mechanical ventilation
                         ]
+
     elif exp_name == "CLIP_SCORE":
         features_list = ["CLIP_Score",
                          ]

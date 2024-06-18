@@ -61,7 +61,7 @@ Y = y.iloc[:, 1].to_numpy()
 exp_name = "24hs"
 feature_24h = get_features(exp_name)
 X = get_data_from_features(patient_info, feature_24h)
-X = X.drop(columns="p_rf_smoker_yn")
+X = X.drop(columns="icu_lab_lact24hpci_x")
 
 # Remove low variance features
 X = remove_low_variance_features(X, variance_ths)
@@ -74,7 +74,6 @@ print("Full features: " + str(n_features))
 
 eicu_root = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
 X_eicu = pd.read_csv(eicu_root + "X_Full_CICU.csv", index_col=0)
-X_eicu = X_eicu.drop(columns="p_rf_smoker_yn")
 
 Y_test_eicu = pd.read_csv(eicu_root + "y_CICU.csv", index_col=0)
 Y_test_eicu = Y_test_eicu.to_numpy()
@@ -134,8 +133,3 @@ predictions_full.to_csv(save_dir+ "predictions_full_eICU_no_smokers.csv")   # no
 y_true_loop = pd.DataFrame(Y_test_eicu)
 y_true_loop = y_true_loop.T
 y_true_loop.to_csv(save_dir+ "y_true_eICU_no_smokers.csv")   # noqa
-# %%
-
-# %%
-results_full
-# %%

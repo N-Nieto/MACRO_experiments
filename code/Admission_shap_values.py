@@ -117,7 +117,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
     predictions.append(pred_test)
 
     # Initialize variables for shaply values from 24hs
-    explainer = shap.Explainer(model["model"])
+    explainer = shap.TreeExplainer(model["model"], X_train_whole)
     shap_values_loop = explainer(X_test)
     shap_values[test_index, :] = shap_values_loop.values
     shap_baseline[test_index] = shap_values_loop.base_values
