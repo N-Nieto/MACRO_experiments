@@ -48,30 +48,33 @@ class XGBClassifier_optuna_es():
                 "objective": self.params_optuna["objective"],
                 'eval_metric': self.params_optuna["eval_metric"],
                 'max_depth': trial.suggest_int('max_depth',
-                                               self.params_optuna["max_depth_min"],
-                                               self.params_optuna["max_depth_max"],
+                                               self.params_optuna["max_depth_min"],         # noqa
+                                               self.params_optuna["max_depth_max"],         # noqa
                                                log=True),
                 'alpha': trial.suggest_float("alpha",
-                                            self.params_optuna["alpha_min"],
-                                            self.params_optuna["alpha_max"], log=True),
+                                             self.params_optuna["alpha_min"],
+                                             self.params_optuna["alpha_max"],
+                                             log=True),
                 'lambda': trial.suggest_float("lambda",
-                                            self.params_optuna["lambda_min"],
-                                            self.params_optuna["lambda_max"],
-                                            log=True),
+                                              self.params_optuna["lambda_min"],
+                                              self.params_optuna["lambda_max"],
+                                              log=True),
                 'eta': trial.suggest_float("eta",
-                                        self.params_optuna["eta_min"],
-                                        self.params_optuna["eta_max"], log=True),
+                                           self.params_optuna["eta_min"],
+                                           self.params_optuna["eta_max"],
+                                           log=True),
             }
             # put data in the right format
             dtrain = xgb.DMatrix(X, label=y)
             # allows to remove non-promising trials
-            pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-auc")         # noqa
+            pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-auc")                 # noqa
 
             cv_results = xgb.cv(params, dtrain,
-                                num_boost_round=self.params_optuna["num_boost_round"],
-                                early_stopping_rounds=self.params_optuna["early_stopping_rounds"],       # noqa
+                                num_boost_round=self.params_optuna["num_boost_round"],                      # noqa
+                                early_stopping_rounds=self.params_optuna["early_stopping_rounds"],          # noqa
                                 maximize=True,
-                                callbacks=[pruning_callback], folds=self.kf_inner)
+                                callbacks=[pruning_callback],
+                                folds=self.kf_inner)
             # include n_estimators in trial to use it later
             trial.set_user_attr("n_estimators", len(cv_results))
 
@@ -82,7 +85,7 @@ class XGBClassifier_optuna_es():
         # Pruner instance
         pruner = optuna.pruners.MedianPruner(n_warmup_steps=5)
         # Study Instance
-        sampler = optuna.samplers.TPESampler(seed=self.params_optuna["random_state"])
+        sampler = optuna.samplers.TPESampler(seed=self.params_optuna["random_state"])                       # noqa
         study = optuna.create_study(pruner=pruner,
                                     sampler=sampler,
                                     direction='maximize')
@@ -92,9 +95,10 @@ class XGBClassifier_optuna_es():
         # Print the best hyperparameters and their value
         best_params = study.best_params
 
-        # Train the final model with the best hyperparameters on the full dataset
+        # Train the final model with the best hyperparameters
+        # on the full dataset
         final_model = xgb.XGBClassifier(**best_params,
-                                        random_state=self.params_optuna["random_state"],
+                                        random_state=self.params_optuna["random_state"],            # noqa
                                         n_estimators=study.best_trial.user_attrs["n_estimators"])   # noqa
         final_model.fit(X, y)
 
@@ -108,3 +112,5 @@ class XGBClassifier_optuna_es():
 
     def predict_proba(self, X):
         return super().predict_proba(X)
+
+# %%

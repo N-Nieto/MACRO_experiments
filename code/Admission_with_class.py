@@ -1,13 +1,11 @@
 
 # %%
 import numpy as np
-import pandas as pd
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
 from lib.experiment_definitions import get_features, get_important_features
 from lib.data_processing import remove_low_variance_features
-from lib.data_processing import remove_random_features_fix_number
-from lib.ml_utils import compute_results, XGBClassifier_optuna_es
-from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df
+from lib.ml_utils import compute_results
+from lib.xgb_optuna import XGBClassifier_optuna_es
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -130,7 +128,6 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
     pred_train = admission_model.predict_proba(X_train_whole)[:, 1]     # noqa                
     # Compute test metrics
     results_training = compute_results(i_fold, "Admission Train", pred_train, Y_train_whole, results_training, ths_range=ths_range)                 # noqa
-
 
     # Compute metrics
     predictions.append(pred_test)
