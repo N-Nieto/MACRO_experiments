@@ -1,8 +1,13 @@
 import pandas as pd
 import numpy as np
+import os
+import sys
 from lib.unit_harmonization import ck_unit_harmonization, crp_unit_harmonization, creatine_unit_harmonization   # noqa
 from lib.unit_harmonization import glucose_unit_harmonization, lactate_unit_harmonization                       # noqa
 from lib.unit_harmonization import hematocrit_unit_harmonization, white_blood_count_unit_harmonization          # noqa
+# Append project path for locating the data
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname((os.path.dirname((__file__)))))))               # noqa
+sys.path.append(project_root)
 
 
 def load_CULPRIT_data(data_dir: str) -> pd.DataFrame:
@@ -17,7 +22,7 @@ def load_CULPRIT_data(data_dir: str) -> pd.DataFrame:
     '''
 
     # Load main data
-    data = pd.read_excel(data_dir + "CULPRIT-data_20210407.xlsx",
+    data = pd.read_excel(project_root + data_dir + "CULPRIT-data_20210407.xlsx",            # noqa
                          sheet_name=None)
 
     # Extract patient data
@@ -355,3 +360,20 @@ def add_resusitation_24hs(patient_info: pd.DataFrame) -> pd.DataFrame:
     patient_info["resuscitation_24hs"] = (series_sum > 0).astype(int)
 
     return patient_info
+
+
+def load_eICU(features, exclude_smokers, X_CULPRIT):
+
+    eicu_root = project_root + "data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"      # noqa
+    X_eicu = pd.read_csv(eicu_root + "X_"+features+"_CICU_No_aperiodic.csv",
+                         index_col=0)
+    if exclude_smokers:
+        X_eicu = X_eicu.drop(columns="p_rf_smoker_yn")
+
+    Y_test_eicu = pd.read_csv(eicu_root + "y_CICU.csv", index_col=0)
+    Y_test_eicu = Y_test_eicu.to_numpy()
+
+    # Get Same naming
+    X_eicu = pd.DataFrame(X_eicu, columns=X_CULPRIT.columns)
+
+    return X_eicu, Y_test_eicu

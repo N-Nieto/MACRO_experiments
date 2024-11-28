@@ -1,19 +1,26 @@
-
 # %%
 import joblib
 import pandas as pd
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features
-from lib.data_processing import remove_low_variance_features
-from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df       # noqa
-from sklearn.model_selection import StratifiedKFold
+import numpy as np
+import os
+import sys
 import optuna
+from sklearn.model_selection import StratifiedKFold
+
+# Append project path for using the functions in lib
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))                # noqa
+sys.path.append(project_root+"/code/")
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features, load_eICU        # noqa
+from lib.experiment_definitions import get_features                                         # noqa
+from lib.data_processing import remove_low_variance_features                                # noqa
+from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df              # noqa
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
 
+data_dir = "/data/CULPRIT/" # noqa
+save_dir = project_root+"/output/"       # noqa
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state
@@ -40,6 +47,9 @@ params_optuna = {
     "num_boost_round": 10000,
 }
 
+# number of thresholds used
+ths_range = list(np.linspace(0, 1, 101))
+
 # Data load and pre-processing
 
 # Get different features depending on the model
@@ -60,54 +70,53 @@ X = get_data_from_features(patient_info, feature_24h)
 # Remove low variance features
 X = remove_low_variance_features(X, variance_ths)
 
+X = X.drop(columns="p_rf_smoker_yn")
 # Final data shape
 n_participants, n_features = X.shape
 
 # Show the feature distribution
 print("Admission features: " + str(n_features))
 
-eicu_root = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
-X_eicu = pd.read_csv(eicu_root + "X_admission_CICU_No_aperiodic.csv",
-                     index_col=0)
-
-Y_test_eicu = pd.read_csv(eicu_root + "y_CICU.csv", index_col=0)
-Y_test_eicu = Y_test_eicu.to_numpy()
-
 # %%
 kf_inner = StratifiedKFold(n_splits=inner_n_splits,
                            shuffle=True,
                            random_state=random_state)
-# Initialize the results
+
 results_admission = []
 
-print("Fitting Admission model on CULPRIT")
+results_LG = []
+
+results_estimators = []
+
+predictions_admission = []
+predictions_LG = []
+y_true_loop = []
+
+print("Fitting Admission model")
 # Train the model with all the features
 admission_model = get_inner_loop_optuna(X,
                                         Y,
                                         kf_inner,
                                         params_optuna)
 
-
-pred_train = admission_model["model"].predict_proba(X)[:, 1]
+pred_train = admission_model["model"].predict_proba(X)[:, 1]     # noqa                
 # Compute test metrics
-results_admission = compute_results(1, "Admission Train (CULPRIT)",
-                                    pred_train, Y, results_admission)
+results_admission = compute_results(1, "Admission Train (CULPRIT)", pred_train, Y, results_admission)                 # noqa
+
+# %%
+X_eicu, Y_test_eicu = load_eICU(features="Admission", exclude_smokers=False,
+                                X_CULPRIT=X)
 
 pred_test = admission_model["model"].predict_proba(X_eicu)[:, 1]
-# Compute test metrics
-results_admission = compute_results(1, "Admission Test (eICU)",
-                                    pred_test, Y_test_eicu, results_admission)
-
+# Compute metrics without removing any feature
+results_admission = compute_results(1, "Admission test (eICU)", pred_test, Y_test_eicu, results_admission)                 # noqa
 
 # Create a dataframe to save
 results_admission = results_to_df(results_admission)
 
 # %%
-results_admission
-# %%
 # % Saving results
 print("Saving Results")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/eICU/admission_model/"       # noqa
 results_admission.to_csv(save_dir+ "Admission_performance_CULPRIT_eICU.csv")              # noqa
 
 # # Save the models in the web_service direction.

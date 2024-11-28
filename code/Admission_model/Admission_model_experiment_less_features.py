@@ -2,17 +2,28 @@
 # %%
 import numpy as np
 import pandas as pd
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features, get_important_features
-from lib.data_processing import remove_low_variance_features
-from lib.data_processing import remove_random_features_fix_number
-from lib.ml_utils import compute_results, get_inner_loop_optuna
-from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df
+import os
+import sys
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+# Append project path for using the functions in lib
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+sys.path.append(project_root+"/code/")
+
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features               # noqa
+from lib.experiment_definitions import get_features, get_important_features             # noqa
+from lib.data_processing import remove_low_variance_features                            # noqa
+from lib.data_processing import remove_random_features_fix_number                       # noqa
+from lib.ml_utils import compute_results, get_inner_loop_optuna                         # noqa
+from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df         # noqa
+
+
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
+
+data_dir = "/data/CULPRIT/" # noqa
+save_dir = project_root+"/output/"       # noqa
 
 # Minimun feature variance
 variance_ths = 0.10
@@ -64,7 +75,7 @@ severity = patient_info["fu_ce_Death_d"] == 0
 severity = severity.astype(int).to_numpy()
 
 # Extract the Admission features
-exp_name = "Admission"
+exp_name = "Admission_less_features"
 features = get_features(exp_name)
 X = get_data_from_features(patient_info, features)
 
@@ -88,7 +99,7 @@ kf_inner = StratifiedKFold(n_splits=inner_n_splits,
                            random_state=random_state)
 
 # Get features in the direct order of importance
-direct_removal = get_important_features("Admission")
+direct_removal = get_important_features(exp_name)
 
 # Inverse order of importance
 inverse_removal = direct_removal[::-1]
@@ -190,27 +201,25 @@ results_estimators = estimator_to_df(results_estimators)
 
 # %%
 
-# % Savng results
+# % Saving results
 print("Saving Results")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/admission_model/"       # noqa
-results_randomly_df.to_csv(save_dir+ "Admission_big_experiment_random_remove.csv")              # noqa
-results_direct_df.to_csv(save_dir+ "Admission_big_experiment_direct_remove.csv")                    # noqa
-results_inverse_df.to_csv(save_dir+ "Admission_big_experiment_inverse_remove.csv")                  # noqa
-results_training_df.to_csv(save_dir+ "Admission_big_experiment_training.csv")                  # noqa
+results_randomly_df.to_csv(save_dir+ "Admission_big_experiment_random_remove_less_features.csv")              # noqa
+results_direct_df.to_csv(save_dir+ "Admission_big_experiment_direct_remove_less_features.csv")                    # noqa
+results_inverse_df.to_csv(save_dir+ "Admission_big_experiment_inverse_remove_less_features.csv")                  # noqa
+results_training_df.to_csv(save_dir+ "Admission_big_experiment_training_less_features.csv")                  # noqa
 
-results_estimators.to_csv(save_dir+ "Best_Admission_model_parameters.csv")   # noqa
-
+results_estimators.to_csv(save_dir+ "Best_Admission_model_parameters_less_features.csv")   # noqa
 
 predictions = pd.DataFrame(predictions)
 predictions = predictions.T
-predictions.to_csv(save_dir+ "predictions_Admission.csv")   # noqa
+predictions.to_csv(save_dir+ "predictions_Admission_less_features.csv")   # noqa
 
 y_true_loop = pd.DataFrame(y_true_loop)
 y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir+ "y_true_Admission.csv")   # noqa
+y_true_loop.to_csv(save_dir+ "y_true_Admission_less_features.csv")   # noqa
 
 
 severity_loop = pd.DataFrame(severity_loop)
 severity_loop = severity_loop.T
-severity_loop.to_csv(save_dir+ "severity_Admission.csv")   # noqa
+severity_loop.to_csv(save_dir+ "severity_Admission_less_features.csv")   # noqa
 # %%
