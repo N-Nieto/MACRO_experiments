@@ -4,12 +4,16 @@ import shap
 import pickle
 import pandas as pd
 from xgboost import XGBClassifier
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.data_processing import remove_low_variance_features
-from lib.experiment_definitions import get_features
+import os
+import sys
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+sys.path.append(project_root+"/code/")
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
+from lib.data_processing import remove_low_variance_features                                # noqa
+from lib.experiment_definitions import get_features                                         # noqa
 # %% Load data
 # Get the estimators
-estimators_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/optuna/big_experiment/"                     # noqa
+estimators_dir = project_root+"/output/optuna/big_experiment/"                     # noqa
 estimators = pd.read_csv(estimators_dir + "Best_Admission_model_parameters.csv")            # noqa
 # Get the estimators for the admission
 estimators_admission = estimators[estimators["Model"] == "Admission"]
@@ -22,7 +26,9 @@ estimators_Full = estimators[estimators["Model"] == "Full"]
 # Get only the estimators for the fit with No Shaffled data
 estimators_Full = estimators_Full[estimators_Full["Random State"] == False]                         # noqa
 
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/final_models/"
+
 # Minimun feature variance
 variance_ths = 0.10
 # Get different features depending on the model
@@ -112,7 +118,6 @@ explainer_admission = shap.Explainer(final_admission_model)
 explainer_full = shap.Explainer(final_24hs_model)
 
 # # Save the models in the web_service direction.
-save_dir = '/home/nnieto/Nico/MODS_project/CULPRIT_project/output/web_service/'    # noqa
 joblib.dump(final_admission_model, save_dir + 'Admission_model.pkl')
 joblib.dump(final_24hs_model, save_dir + 'Full_model.pkl')
 

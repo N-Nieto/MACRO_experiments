@@ -1,20 +1,24 @@
 
 # %%
 import shap
-
-import joblib
-import pandas as pd
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features
-from lib.data_processing import remove_low_variance_features, naming_for_shap
-from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df       # noqa
+import os
+import sys
 from sklearn.model_selection import StratifiedKFold
 import optuna
+# Append project path for using the functions in lib
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+sys.path.append(project_root+"/code/")
+
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features, load_eICU    # noqa
+from lib.experiment_definitions import get_features                                     # noqa
+from lib.data_processing import remove_low_variance_features, naming_for_shap           # noqa
+from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df          # noqa
+
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
+data_dir = "/data/CULPRIT/"
 
 # Minimun feature variance
 variance_ths = 0.10
@@ -69,12 +73,8 @@ n_participants, n_features = X.shape
 # Show the feature distribution
 print("Admission features: " + str(n_features))
 
-eicu_root = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
-X_eicu = pd.read_csv(eicu_root + "X_admission_CICU_No_aperiodic.csv",
-                     index_col=0)
-
-Y_test_eicu = pd.read_csv(eicu_root + "y_CICU.csv", index_col=0)
-Y_test_eicu = Y_test_eicu.to_numpy()
+X_eicu, Y_test_eicu = load_eICU(features="Admission", exclude_smokers=False,
+                                X_CULPRIT=X)
 
 # %%
 kf_inner = StratifiedKFold(n_splits=inner_n_splits,

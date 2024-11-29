@@ -22,8 +22,8 @@ from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df 
 
 # %%
 
-data_dir = "/data/CULPRIT/" # noqa
-save_dir = project_root+"/output/"       # noqa
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/output/"
 
 # Minimun feature variance
 variance_ths = 0.10

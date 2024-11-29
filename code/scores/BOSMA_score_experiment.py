@@ -7,7 +7,7 @@ from lib.eICU_processing import eICU_filter_CS_patients
 from lib.eICU_data_loading import load_eicu_diagnosis, load_eicu_patient_information    # noqa
 from lib.eICU_data_loading import load_eicu_mechanical_ventilation
 
-root_dir = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/"              # noqa
+root_dir = "/data/eicu-collaborative-research-database-2.0/"              # noqa
 # %%
 # Load all the diagnosis
 diagnosis = load_eicu_diagnosis(root_dir)

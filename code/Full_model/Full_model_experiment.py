@@ -2,19 +2,22 @@
 # %%
 import numpy as np
 import pandas as pd
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features, get_important_features
-from lib.data_processing import remove_low_variance_features
-from lib.data_processing import remove_random_features_fix_number
-from lib.ml_utils import compute_results, get_inner_loop_optuna
-from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df
-
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
+import os
+import sys
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))
+sys.path.append(project_root+"/code/")
+
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                                   # noqa
+from lib.experiment_definitions import get_features, get_important_features                                 # noqa
+from lib.data_processing import remove_low_variance_features, remove_random_features_fix_number             # noqa
+from lib.ml_utils import compute_results, get_inner_loop_optuna                                             # noqa
+from lib.ml_utils import results_to_df, save_best_model_params, estimator_to_df                             # noqa
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
-
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/output/"
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state

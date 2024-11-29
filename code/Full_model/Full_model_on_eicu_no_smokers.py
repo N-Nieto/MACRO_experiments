@@ -2,17 +2,22 @@
 import joblib
 import numpy as np
 import pandas as pd
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features
-from lib.data_processing import remove_low_variance_features
-from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df       # noqa
 from sklearn.model_selection import StratifiedKFold
 import optuna
+import os
+import sys
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))
+sys.path.append(project_root+"/code/")
+
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features, load_eICU                        # noqa
+from lib.experiment_definitions import get_features                                                         # noqa
+from lib.data_processing import remove_low_variance_features                                                # noqa
+from lib.ml_utils import compute_results, get_inner_loop_optuna                                             # noqa
+from lib.ml_utils import results_to_df                                                                      # noqa
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
-
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/output/"
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state
@@ -72,11 +77,10 @@ n_participants, n_features = X.shape
 # Show the feature distribution
 print("Full features: " + str(n_features))
 
-eicu_root = "/home/nnieto/Nico/MODS_project/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
-X_eicu = pd.read_csv(eicu_root + "X_Full_CICU.csv", index_col=0)
 
-Y_test_eicu = pd.read_csv(eicu_root + "y_CICU.csv", index_col=0)
-Y_test_eicu = Y_test_eicu.to_numpy()
+X_eicu, Y_test_eicu = load_eICU(features="Full", exclude_smokers=True,
+                                X_CULPRIT=X)
+
 # %%
 
 
@@ -113,7 +117,6 @@ results_full = results_to_df(results_full)
 # %%
 # % Saving results
 print("Saving Results")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/eICU/full_model/"       # noqa
 results_full.to_csv(save_dir+ "Full_performance_CULPRIT_eICU.csv")                    # noqa
 # # Save the models in the web_service direction.
 joblib.dump(full_model["model"], save_dir + 'Full_model_no_smokers.pkl')

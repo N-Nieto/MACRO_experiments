@@ -365,7 +365,7 @@ def add_resusitation_24hs(patient_info: pd.DataFrame) -> pd.DataFrame:
 def load_eICU(features, exclude_smokers, X_CULPRIT):
 
     eicu_root = project_root + "data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"      # noqa
-    X_eicu = pd.read_csv(eicu_root + "X_"+features+"_CICU_No_aperiodic.csv",
+    X_eicu = pd.read_csv(eicu_root + "X_"+features+"_CICU.csv",
                          index_col=0)
     if exclude_smokers:
         X_eicu = X_eicu.drop(columns="p_rf_smoker_yn")

@@ -1,14 +1,21 @@
 # %%
 import pandas as pd
 import random
+import os
+import sys
 from sklearn.linear_model import LogisticRegression
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features
-from lib.ml_utils import compute_results
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
-# %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
 
+# Append project path for using the functions in lib
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+sys.path.append(project_root+"/code/")
+
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
+from lib.experiment_definitions import get_features                                         # noqa
+from lib.ml_utils import compute_results                                                    # noqa
+# %%
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/output/"
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state

@@ -1,15 +1,23 @@
 # %%
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features
-from lib.data_processing import remove_low_variance_features
-from lib.ml_utils import compute_results, results_to_df       # noqa
+import os
+import sys
+import pandas as pd
+
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold    # noqa
 from sklearn.linear_model import LogisticRegressionCV
 from sklearn.preprocessing import StandardScaler
 
-import pandas as pd
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+sys.path.append(project_root+"/code/")
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
+from lib.experiment_definitions import get_features                                         # noqa
+from lib.data_processing import remove_low_variance_features                                # noqa
+from lib.ml_utils import compute_results, results_to_df                                     # noqa
+
+
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/output/"
 
 # Minimun feature variance
 variance_ths = 0.10
@@ -98,7 +106,6 @@ results_pt = results_to_df(results_by_fold)
 # %%
 # % Saving results
 print("Saving Results")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/LG_compare/LG_with_scaler/"       # noqa
 results_pt.to_csv(save_dir+ "LG_complete_data_admission.csv")              # noqa
 
 predictions_full = pd.DataFrame(predictions_full)

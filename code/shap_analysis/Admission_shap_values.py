@@ -4,15 +4,22 @@ import joblib
 import shap
 import numpy as np
 import pandas as pd
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features
-from lib.experiment_definitions import get_features
-from lib.data_processing import remove_low_variance_features, naming_for_shap
-from lib.ml_utils import get_inner_loop_optuna
+import os
+import sys
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
+# Append project path for using the functions in lib
+project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))                # noqa
+sys.path.append(project_root+"/code/")
+from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
+from lib.experiment_definitions import get_features                                         # noqa
+from lib.data_processing import remove_low_variance_features, naming_for_shap               # noqa
+from lib.ml_utils import get_inner_loop_optuna                                              # noqa
+
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
 data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/" # noqa
+save_dir = project_root+"/output/shap/"
 
 # Minimun feature variance
 variance_ths = 0.10
@@ -125,7 +132,6 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
 
 # %% Saving
 print("Saving")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/review_1/admission_model/shap/"              # noqa
 
 save_list = [
              [shap_values, "shap_values_"+exp_name],

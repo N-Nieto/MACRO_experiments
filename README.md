@@ -46,6 +46,9 @@ The traditional risk scores were bechmarked, building a Logistic Regression (LG)
 ## Extra analysis
 To compare with the XGBoost architecture used in the Admission and Full models, a Logistic Regression model was developed. The model was only developed for the admission features, as LG can not handle missing values. 
 
+# [Web demo](https://macro.appliedml.org/)
+We developed a web demo to showcase how the models could be used. Note that the demo only allows the user to load pre-existing syntetic data, developed to showcase the model beheivor.
+
 ## Citation
 Soon
 
