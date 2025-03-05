@@ -135,8 +135,8 @@ X_admission = merge_data.drop(["patientunitstayid", "icd9code",
                                "hospitaldischargestatus"], axis=1)
 
 X_admission = admission_name_matching(X_admission)
-X_admission.to_csv(save_dir+"X_admission_CICU.csv")   # noqa
-y_eicu.to_csv(save_dir+"y_CICU.csv")                  # noqa
+# X_admission.to_csv(save_dir+"X_admission_CICU.csv")   # noqa
+# y_eicu.to_csv(save_dir+"y_CICU.csv")                  # noqa
 
 # %% 24 features
 
@@ -156,7 +156,7 @@ Full_model_data = merge_data.drop(["patientunitstayid", "icd9code",
                                    "hospitaldischargestatus"], axis=1)
 
 Full_model_data = full_model_name_matching(Full_model_data)
-Full_model_data.to_csv(save_dir+"X_Full_CICU.csv")    # noqa
+# Full_model_data.to_csv(save_dir+"X_Full_CICU.csv")    # noqa
 
 # %%
 print("DONE!")

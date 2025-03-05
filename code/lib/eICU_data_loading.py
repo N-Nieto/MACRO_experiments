@@ -407,7 +407,7 @@ def load_eicu_24hs_features(root_dir: str) -> pd.DataFrame:
     # Define features to include
     features_lab = ["lactate", "BNP", "CPK", "troponin - T", "creatinine",
                     "WBC x 1000", "Hct", "CRP",  "PT - INR", "glucose",
-                    "ALT (SGPT)"]
+                    "ALT (SGPT)", "-monos"]
 
     # Filter lab data for selected features
     lab = lab[lab["labname"].isin(features_lab)]
