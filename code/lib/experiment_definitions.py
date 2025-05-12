@@ -29,25 +29,24 @@ def get_features(exp_name: str) -> List[str]:
                         "p_mh_pad_yn",              # 8  Known peripheral artery disease                                                    # noqa
                         "p_mh_renf_yn",             # 9  Known renal insufficiency (GFR < 30 ml/min)                                        # noqa
                         "p_mh_dial_yn",             # 10 Chronic dialysis
-                        "p_rf_smoker_yn",           # 11 Current smoking
-                        "p_rf_aht_yn",              # 12 Arterial Hypertension
-                        "p_rf_dyslip_yn",           # 13 Dyslipidemia
-                        "p_rf_dm_yn",               # 14 Diabetes mellitus
+                        "p_rf_aht_yn",              # 11 Arterial Hypertension
+                        "p_rf_dyslip_yn",           # 12 Dyslipidemia
+                        "p_rf_dm_yn",               # 13 Diabetes mellitus
 
                         # ECG
-                        "hpr_ecg_sinrhy_y",         # 15 Sinus rhythm
-                        "hpr_ecg_afib_y",           # 16 Atrial fibrillation
-                        "hpr_ecg_avblock3_y",       # 17 AV-block III
-                        "hpr_ecg_stemi_yn",         # 18 ST-segment elevation
+                        "hpr_ecg_sinrhy_y",         # 14 Sinus rhythm
+                        "hpr_ecg_afib_y",           # 15 Atrial fibrillation
+                        "hpr_ecg_avblock3_y",       # 16 AV-block III
+                        "hpr_ecg_stemi_yn",         # 17 ST-segment elevation
 
                         # Clinical shock characteristics
-                        "hpr_hmdyn_hr_bpm",         # 19 Heart rate [bpm]
-                        "hpr_hmdyn_sbp_mmhg",       # 20 Systolic blood pressure                                                            # noqa
-                        "hpr_hmdyn_dbp_mmhg",       # 21 Diastolic blood pressure                                                           # noqa
-                        "had_sy_ams_yn",            # 22 Altered mental status
-                        "had_sy_extremity_yn",      # 23 Cold, clammy skin and extremities                                                  # noqa
-                        "had_base_mechvent_yn",     # 24 Mechanical ventilation
-                        "had_base_cpr24h_yn"        # 25 Resuscitation within 24 hs before admission                                        # noqa
+                        "hpr_hmdyn_hr_bpm",         # 18 Heart rate [bpm]
+                        "hpr_hmdyn_sbp_mmhg",       # 19 Systolic blood pressure                                                            # noqa
+                        "hpr_hmdyn_dbp_mmhg",       # 20 Diastolic blood pressure                                                           # noqa
+                        "had_sy_ams_yn",            # 21 Altered mental status
+                        "had_sy_extremity_yn",      # 22 Cold, clammy skin and extremities                                                  # noqa
+                        "had_base_mechvent_yn",     # 23 Mechanical ventilation
+                        "had_base_cpr24h_yn"        # 24 Resuscitation within 24 hs before admission                                        # noqa
                         ]
 
     elif exp_name == "24hs":
@@ -67,52 +66,51 @@ def get_features(exp_name: str) -> List[str]:
                         "p_mh_pad_yn",              # 8  Known peripheral artery disease                                                    # noqa
                         "p_mh_renf_yn",             # 9  Known renal insufficiency (GFR < 30 ml/min)                                        # noqa
                         "p_mh_dial_yn",             # 10 Chronic dialysis
-                        "p_rf_smoker_yn",           # 11 Current smoking
-                        "p_rf_aht_yn",              # 12 Arterial Hypertension
-                        "p_rf_dyslip_yn",           # 13 Dyslipidemia
-                        "p_rf_dm_yn",               # 14 Diabetes mellitus
+                        "p_rf_aht_yn",              # 11 Arterial Hypertension
+                        "p_rf_dyslip_yn",           # 12 Dyslipidemia
+                        "p_rf_dm_yn",               # 13 Diabetes mellitus
 
                         # ECG
-                        "hpr_ecg_sinrhy_y",         # 15 Sinus rhythm
-                        "hpr_ecg_afib_y",           # 16 Atrial fibrillation
-                        "hpr_ecg_avblock3_y",        # 17 AV-block III
-                        "hpr_ecg_stemi_yn",         # 18 ST-segment elevation
+                        "hpr_ecg_sinrhy_y",         # 14 Sinus rhythm
+                        "hpr_ecg_afib_y",           # 15 Atrial fibrillation
+                        "hpr_ecg_avblock3_y",       # 16 AV-block III
+                        "hpr_ecg_stemi_yn",         # 17 ST-segment elevation
 
                         # Clinical shock characteristics
-                        "hpr_hmdyn_hr_bpm",         # 19 Heart rate [bpm]
-                        "hpr_hmdyn_sbp_mmhg",       # 20 Systolic blood pressure                                                            # noqa
-                        "hpr_hmdyn_dbp_mmhg",       # 21 Diastolic blood pressure                                                           # noqa    
-                        "had_sy_ams_yn",            # 22 Altered mental status
-                        "had_sy_extremity_yn",      # 23 Cold, clammy skin and extremities                                                  # noqa
-                        "had_base_mechvent_yn",     # 24 Mechanical ventilation
-                        "had_base_cpr24h_yn",        # 25 Resuscitation within 24 hs before admission                                        # noqa
+                        "hpr_hmdyn_hr_bpm",         # 18 Heart rate [bpm]
+                        "hpr_hmdyn_sbp_mmhg",       # 19 Systolic blood pressure                                                            # noqa
+                        "hpr_hmdyn_dbp_mmhg",       # 20 Diastolic blood pressure                                                           # noqa
+                        "had_sy_ams_yn",            # 21 Altered mental status
+                        "had_sy_extremity_yn",      # 22 Cold, clammy skin and extremities                                                  # noqa
+                        "had_base_mechvent_yn",     # 23 Mechanical ventilation
+                        "had_base_cpr24h_yn",        # 24 Resuscitation within 24 hs before admission                                        # noqa
 
                         # Added 24hs features
                         # Organ perfusion
-                        "admission_lactate",        # 26 Admission Lactate: Pre-PCI or Post-PCI if Pre is missing                           # noqa
-                        "icu_lab_lact8hpci_x",      # 27 Serum lactated measured 8hs after admission                                        # noqa
-                        "icu_lab_lact16hpci_x",     # 28 Serum lactated measured 16hs after admission                                       # noqa
-                        "icu_lab_lact24hpci_x",     # 29 Serum lactated measured 24hs after admission                                       # noqa    
+                        "admission_lactate",        # 25 Admission Lactate: Pre-PCI or Post-PCI if Pre is missing                           # noqa
+                        "icu_lab_lact8hpci_x",      # 26 Serum lactated measured 8hs after admission                                        # noqa
+                        "icu_lab_lact16hpci_x",     # 27 Serum lactated measured 16hs after admission                                       # noqa
+                        "icu_lab_lact24hpci_x",     # 28 Serum lactated measured 24hs after admission                                       # noqa    
 
                         # Laboratory assessment
-                        "pbnp",                     # 30 Nt-pro BNP
-                        "icu_lab_ck_x",             # 31 CK (Can be filled)
-                        "tnt",                      # 32 Troponine V1 pg/ml
-                        "creatine",                 # 33 Creatine
-                        "white_cell_count",         # 34 White cell count
-                        "hematocrit",               # 35 Hematocrit
-                        "crp",                      # 36 CRP
-                        "icu_lab_inr_r",            # 37 INR
-                        "glucose",                  # 38 Glucose
-                        "alat",                     # 39 ALAT
+                        "pbnp",                     # 29 Nt-pro BNP
+                        "icu_lab_ck_x",             # 30 CK (Can be filled)
+                        "tnt",                      # 31 Troponine V1 pg/ml
+                        "creatine",                 # 32 Creatine
+                        "white_cell_count",         # 33 White cell count
+                        "hematocrit",               # 34 Hematocrit
+                        "crp",                      # 35 CRP
+                        "icu_lab_inr_r",            # 36 INR
+                        "glucose",                  # 37 Glucose
+                        "alat",                     # 38 ALAT
 
                         # Treatment modalities
-                        "hpe_proc_mechs_yn",            # 40 Mechanical support
-                        "renal_replacement_therapy",    # 41 Renal Replac. Ther
-                        "cathecholamine_therapy",       # 42 Catecholamine thet
-                        "sepsis",                       # 43 Sepsis
-                        "ventricular_fibrillation",     # 44 Ventricular fib
-                        "stroke",                       # 45 Stroke
+                        "hpe_proc_mechs_yn",            # 39 Mechanical support
+                        "renal_replacement_therapy",    # 40 Renal Replac. Ther
+                        "cathecholamine_therapy",       # 41 Catecholamine thet
+                        "sepsis",                       # 42 Sepsis
+                        "ventricular_fibrillation",     # 43 Ventricular fib
+                        "stroke",                       # 44 Stroke
                          ]
 
     elif exp_name == "Admission_less_features":
@@ -128,7 +126,6 @@ def get_features(exp_name: str) -> List[str]:
                         "p_mh_stroke_yn",           # 7  Previous stroke
                         "p_mh_renf_yn",             # 9  Known renal insufficiency (GFR < 30 ml/min)                                        # noqa
                         "p_mh_dial_yn",             # 10 Chronic dialysis
-                        "p_rf_smoker_yn",           # 11 Current smoking
                         "p_rf_dyslip_yn",           # 13 Dyslipidemia
                         "p_rf_dm_yn",               # 14 Diabetes mellitus
 
@@ -180,7 +177,6 @@ def get_important_features(exp_name: str) -> List[str]:
                          "had_sy_ams_yn",
                          "hpr_ecg_sinrhy_y",
                          "had_pex_height_cm",
-                         "p_rf_smoker_yn",
                          "had_base_mechvent_yn",
                          "p_rf_dm_yn",
                          "had_pex_weight_kg",
@@ -221,7 +217,6 @@ def get_important_features(exp_name: str) -> List[str]:
                          "had_sy_ams_yn",
                          "hpr_ecg_sinrhy_y",
                          "had_pex_height_cm",
-                         "p_rf_smoker_yn",
                          "had_base_mechvent_yn",
                          "p_rf_dm_yn",
                          "had_pex_weight_kg",

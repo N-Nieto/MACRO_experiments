@@ -1,6 +1,5 @@
+
 # %%
-import joblib
-import pandas as pd
 import numpy as np
 import os
 import sys
@@ -70,7 +69,6 @@ X = get_data_from_features(patient_info, feature_24h)
 # Remove low variance features
 X = remove_low_variance_features(X, variance_ths)
 
-X = X.drop(columns="p_rf_smoker_yn")
 # Final data shape
 n_participants, n_features = X.shape
 
@@ -104,7 +102,7 @@ pred_train = admission_model["model"].predict_proba(X)[:, 1]     # noqa
 results_admission = compute_results(1, "Admission Train (CULPRIT)", pred_train, Y, results_admission)                 # noqa
 
 # %%
-X_eicu, Y_test_eicu = load_eICU(features="Admission", exclude_smokers=False,
+X_eicu, Y_test_eicu = load_eICU(features="Admission", exclude_smokers=True,
                                 X_CULPRIT=X)
 
 pred_test = admission_model["model"].predict_proba(X_eicu)[:, 1]
@@ -113,31 +111,5 @@ results_admission = compute_results(1, "Admission test (eICU)", pred_test, Y_tes
 
 # Create a dataframe to save
 results_admission = results_to_df(results_admission)
-
-# %%
-# % Saving results
-print("Saving Results")
-results_admission.to_csv(save_dir+ "Admission_performance_CULPRIT_eICU.csv")              # noqa
-
-# # Save the models in the web_service direction.
-joblib.dump(admission_model["model"], save_dir + 'Admission_model.pkl')
-
-
-predictions = pd.DataFrame(pred_train)
-predictions = predictions.T
-predictions.to_csv(save_dir+ "predictions_Admission_CULPRIT.csv")   # noqa
-
-y_true_loop = pd.DataFrame(Y)
-y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir+ "y_true_Admission_CULPRIT.csv")   # noqa
-
-predictions = pd.DataFrame(pred_test)
-predictions = predictions.T
-predictions.to_csv(save_dir+ "predictions_Admission_eICU.csv")   # noqa
-
-y_true_loop = pd.DataFrame(Y_test_eicu)
-y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir+ "y_true_Admission_eICU.csv")   # noqa
-
 
 # %%
