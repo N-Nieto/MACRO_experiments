@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_selection import VarianceThreshold
 from typing import List
+from pathlib import Path
 
 
 def randomly_replace_with_nan(
@@ -74,8 +75,7 @@ def remove_low_variance_features(
 
     return data
 
-
-def naming_for_shap(data_dir: str, data: pd.DataFrame) -> pd.DataFrame:
+def naming_for_shap(data_dir: Path, data: pd.DataFrame) -> pd.DataFrame:
     """
     Rename columns of a DataFrame based on a mapping provided in an Excel file.
 
@@ -88,7 +88,7 @@ def naming_for_shap(data_dir: str, data: pd.DataFrame) -> pd.DataFrame:
     """
 
     # Read the Excel file into a DataFrame
-    table = pd.read_excel(data_dir + "Shorten_table.xlsx", sheet_name=None, index_col=0)
+    table = pd.read_excel(data_dir / "Shorten_table.xlsx", sheet_name=None, index_col=0)
 
     # Specific sheet to use
     table = table["Sheet1"]

@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+from pathlib import Path
+
 from lib.unit_harmonization import (
     ck_unit_harmonization,
     crp_unit_harmonization,
@@ -15,7 +17,7 @@ from lib.unit_harmonization import (
 )
 
 
-def load_CULPRIT_data(data_dir: str) -> pd.DataFrame:
+def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
     """
     Load CULPRIT study data, keep only the first day information, and harmonize units.
     # noqa
@@ -110,7 +112,7 @@ def create_unique_patient_ID(data: pd.DataFrame) -> pd.DataFrame:
         data["cor_ctr_center_id"].astype(str)
         + "-"
         + data["cor_pt_caseno_id"].astype(str)
-    )  # noqa
+    )
     return data
 
 
@@ -420,15 +422,11 @@ def load_eICU(
         - Y_test_eicu (np.ndarray): The target labels for the eICU dataset.
     """
     eicu_root = (
-        data_dir / "eicu-collaborative-research-database-2.0/preprocessed_MACRO/"
+        data_dir / "eicu-collaborative-research-database-2.0" / "preprocessed_MACRO/"
     )
 
     # Load eICU feature data
     X_eicu = pd.read_csv(eicu_root / f"X_{features}_CICU.csv", index_col=0)
-
-    # Drop unnecessary columns
-    if "p_rf_smoker_yn" in X_eicu.columns:
-        X_eicu = X_eicu.drop(columns="p_rf_smoker_yn")
 
     # Load eICU target labels
     Y_test_eicu = pd.read_csv(eicu_root / "y_CICU.csv", index_col=0).to_numpy()

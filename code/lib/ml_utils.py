@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from typing import Dict, Union, List, Any
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import (
     f1_score,
     recall_score,
@@ -14,7 +14,10 @@ from imblearn.metrics import specificity_score, sensitivity_score
 
 
 def get_inner_loop_optuna(
-    X: pd.DataFrame, y: pd.Series, kf_inner: KFold, params_optuna: Dict[str, float]
+    X: pd.DataFrame,
+    y: pd.Series,
+    kf_inner: StratifiedKFold,
+    params_optuna: Dict[str, float],
 ) -> Dict[str, Union[xgb.XGBClassifier, Dict[str, float]]]:
     """
     Get the best model with OPTUNA
