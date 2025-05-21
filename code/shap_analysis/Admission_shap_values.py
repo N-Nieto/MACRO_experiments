@@ -4,24 +4,26 @@ import joblib
 import shap
 import numpy as np
 import pandas as pd
-import os
 import sys
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 import optuna
+from pathlib import Path
+
+optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # Append project path for using the functions in lib
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))  # noqa
-sys.path.append(project_root + "/code/")
+project_root = Path().resolve().parents[1]
+sys.path.append(str(project_root / "code/"))
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features  # noqa
 from lib.experiment_definitions import get_features  # noqa
 from lib.data_processing import remove_low_variance_features, naming_for_shap  # noqa
 from lib.ml_utils import get_inner_loop_optuna  # noqa
+from lib.utils import ensure_dir  # noqa
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
-data_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/CULPRIT_data/202302_Jung/"  # noqa
-save_dir = project_root + "/output/shap/"
-
+data_dir = project_root.parent / "CULPRIT_data" / "202302_Jung/"  # noqa
+save_dir = project_root / "output" / "shap" / "Admission_model/"
+ensure_dir(save_dir)
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state
@@ -29,7 +31,7 @@ random_state = 23
 
 # Cross validation parameters
 out_n_splits = 10
-out_n_repetitions = 1
+out_n_repetitions = 10
 # Inner CV
 inner_n_splits = 3
 inner_n_repetitions = 1
@@ -53,8 +55,6 @@ params_optuna = {
 }
 # Model Threshold
 thr = 0.5
-# number of thresholds used
-ths_range = list(np.linspace(0, 1, 101))
 
 # Data load and pre-processing
 
@@ -95,7 +95,6 @@ kf_inner = StratifiedKFold(
     n_splits=inner_n_splits, shuffle=True, random_state=random_state
 )
 
-
 # Data shape
 n_participants, n_features = X.shape
 
@@ -105,6 +104,8 @@ shap_baseline = np.ones(n_participants) * -1
 shap_data = np.ones([n_participants, n_features]) * -1
 
 predictions = []
+shap_loop = []
+repetition = 0
 # Outer loop
 for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
     print("FOLD: " + str(i_fold))
@@ -130,6 +131,12 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
     shap_baseline[test_index] = shap_values_loop.base_values
     shap_data[test_index, :] = shap_values_loop.data
 
+    current_repetition = (i_fold + 1) // out_n_repetitions
+
+    if current_repetition != repetition:
+        repetition = (i_fold + 1) // out_n_repetitions
+        print("Current repetition")
+        shap_loop.append([shap_values, shap_baseline, shap_data])
 # %% Saving
 print("Saving")
 
@@ -137,20 +144,21 @@ save_list = [
     [shap_values, "shap_values_" + exp_name],
     [shap_baseline, "shap_baseline" + exp_name],
     [shap_data, "shap_data" + exp_name],
+    [shap_loop, "shap_loop_results" + exp_name],
 ]
 
 
 for list_to_save, save_name in save_list:
-    with open(save_dir + save_name, "wb") as fp:  # Pickling
+    with open(save_dir / save_name, "wb") as fp:  # Pickling
         pickle.dump(list_to_save, fp)
 
-X.to_csv(save_dir + "X_" + exp_name + ".csv")
-y.iloc[:, 1].to_csv(save_dir + "Y_" + exp_name + ".csv")
+X.to_csv(save_dir / ("X_" + exp_name + ".csv"))
+y.iloc[:, 1].to_csv(save_dir / ("Y_" + exp_name + ".csv"))
 
 predictions = pd.DataFrame(predictions)
 predictions = predictions.T
-predictions.to_csv(save_dir + "predictions_Admission_shap.csv")  # noqa
+predictions.to_csv(save_dir / "predictions_Admission_shap.csv")  # noqa
 
-joblib.dump(model["model"], save_dir + "model_" + exp_name + "_shap_values.pkl")  # noqa
+joblib.dump(model["model"], save_dir / ("model_" + exp_name + "_shap_values.pkl"))  # noqa
 print("Experiment done")
 # %%
