@@ -92,3 +92,25 @@ def test_alternative_outcome_and_validation(eicu_dir):
         load_eICU(eicu_dir, "Admission", X_culprit, outcome="30_day_mortality")
     with pytest.raises(ValueError):
         load_eICU(eicu_dir, "24hs", X_culprit)
+
+
+def test_load_eicu_troponin_i_proxy(tmp_path):
+    import numpy as np
+    from lib.data_load_utils import load_eICU
+
+    root = tmp_path / "eicu-collaborative-research-database-2.0" / "preprocessed_MACRO"
+    root.mkdir(parents=True)
+    X = pd.DataFrame({"patientunitstayid": [1, 2, 3, 4], "tnt": [500.0, np.nan, np.nan, np.nan],
+                      "eicu_troponin_I": [1.0, 2.0, np.nan, 50.0]}).set_index("patientunitstayid")
+    X.to_csv(root / "X_Full_CICU.csv")
+    pd.DataFrame({"patientunitstayid": [1, 2, 3, 4], "in_hospital_death": [0, 1, 0, 1],
+                  "death_within_24h": [0, 0, 0, 0]}).to_csv(root / "outcomes_CICU.csv", index=False)
+    culprit = pd.DataFrame({"tnt": np.arange(1, 1001, dtype=float), "age": 1.0})
+    X_eicu, _ = load_eICU(tmp_path, "Full", culprit)
+    assert list(X_eicu.columns) == ["tnt", "age"]  # extra column dropped
+    assert X_eicu.loc[1, "tnt"] == 500.0  # measured troponin T kept
+    tnt = X_eicu["tnt"].to_numpy(dtype=float)
+    assert np.isnan(tnt[2])  # patient 3: no troponin at all
+    assert tnt[1] < tnt[3]  # rank of troponin I preserved (patients 2 and 4)
+    X_off, _ = load_eICU(tmp_path, "Full", culprit, tni_as_tnt_proxy=False)
+    assert X_off["tnt"].isna().sum() == 3

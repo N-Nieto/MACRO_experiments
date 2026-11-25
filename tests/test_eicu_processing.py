@@ -6,7 +6,6 @@ from lib.eICU_processing import (
     EICU_ADMISSION_NAME_MAPPING,
     EICU_FULL_NAME_MAPPING,
     admission_name_matching,
-    eICU_admission_heart_function,
     full_model_name_matching,
 )
 from lib.experiment_definitions import get_features
@@ -24,6 +23,7 @@ def _fake_eicu(columns):
     ],
 )
 def test_name_matching_follows_experiment_features(func, mapping, exp_name):
+    # (binary features and vitals already carry CULPRIT names, see lib.eICU_features)
     extra = ["patientunitstayid_copy", "p_rf_smoker_yn"]  # must be dropped
     lact = ["admission_lactate", "icu_lab_lact8hpci_x", "hpe_proc_mechs_yn"]
     eicu = _fake_eicu(list(mapping) + extra + (lact if exp_name == "24hs" else []))
@@ -38,42 +38,6 @@ def test_name_matching_follows_experiment_features(func, mapping, exp_name):
     assert unavailable and out[list(unavailable)].isna().all().all()
     # the input is not modified in place
     assert list(eicu.columns)[: len(mapping)] == list(mapping)
-
-
-def test_heart_function_raw_file_branch(tmp_path):
-    vitals = pd.DataFrame(
-        {
-            "patientunitstayid": [1, 1, 1, 2, 3],
-            "observationoffset": [-10, 10, 100, 0, 0],
-            "heartrate": [100, 120, 50, 300, 80],  # 300 is implausible
-            "systemicsystolic": [90, 110, 80, 85, 95],
-            "systemicdiastolic": [50, 60, 40, 45, 55],
-        }
-    )
-    vitals.to_csv(tmp_path / "vitalPeriodic.csv.gz", index=False)
-    rng = [(20, 200, "heartrate"), (20, 200, "systemicsystolic"), (20, 200, "systemicdiastolic")]
-    out = eICU_admission_heart_function(
-        str(tmp_path) + "/", rng, selected_patients=pd.Series([1, 2]),
-        time_before_cut_off=30,
-    ).set_index("patientunitstayid")
-    assert set(out.index) == {1, 2}  # patient 3 not selected
-    assert out.loc[1, "heartrate"] == 110  # median of 100, 120 (offset 100 cut)
-    assert out["heartrate"].isna().loc[2]  # implausible value removed
-
-
-def test_heart_function_without_patient_filter(tmp_path):
-    vitals = pd.DataFrame(
-        {
-            "patientunitstayid": [1, 2],
-            "observationoffset": [0, 0],
-            "heartrate": [90, 95],
-            "systemicsystolic": [100, 105],
-            "systemicdiastolic": [60, 65],
-        }
-    )
-    vitals.to_csv(tmp_path / "vitalPeriodic.csv.gz", index=False)
-    out = eICU_admission_heart_function(str(tmp_path) + "/", [])
-    assert set(out["patientunitstayid"]) == {1, 2}
 
 
 def test_eicu_lab_units():
@@ -129,3 +93,9 @@ def test_quantile_match():
     assert np.isnan(out[1])
     assert out[0] < out[3] < out[2]  # order kept
     np.testing.assert_allclose(out.dropna().sort_values(), np.quantile(ref, [1 / 6, 3 / 6, 5 / 6]))
+
+
+def test_full_matching_keeps_troponin_i():
+    eicu = _fake_eicu(["CPK", "eicu_troponin_I", "unrelated"])
+    out = full_model_name_matching(eicu)
+    assert list(out.columns) == get_features("24hs") + ["eicu_troponin_I"]

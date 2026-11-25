@@ -63,3 +63,10 @@ def test_therapy_flags_use_the_patients_own_admission_date(culprit_dir):
         assert 0 < expected.mean() < 1
     # Patients missing from the endpoint sheet stay missing (NaN), as before
     assert data["renal_replacement_therapy"].isna().sum() > 0
+
+
+def test_admission_lactate_is_pre_pci_first():
+    from lib.data_load_utils import create_admission_lactate
+    df = pd.DataFrame({"icu_lab_lactprepci_x": [5.0, None, None], "icu_lab_lactpopci_x": [2.0, 3.0, None]})
+    out = create_admission_lactate(df)["admission_lactate"]
+    assert out.iloc[0] == 5.0 and out.iloc[1] == 3.0 and pd.isna(out.iloc[2])
