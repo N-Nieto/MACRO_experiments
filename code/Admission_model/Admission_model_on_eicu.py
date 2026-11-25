@@ -1,26 +1,35 @@
 
 # %%
-import numpy as np
 import os
 import sys
+from pathlib import Path
+
+import numpy as np
 import optuna
 from sklearn.model_selection import StratifiedKFold
 
 # Append project path for using the functions in lib
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))                # noqa
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))              
 sys.path.append(project_root+"/code/")
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features, load_eICU        # noqa
-from lib.experiment_definitions import get_features                                         # noqa
-from lib.data_processing import remove_low_variance_features                                # noqa
-from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df              # noqa
+from lib.data_load_utils import get_data_from_features, load_CULPRIT_data, load_eICU
+from lib.data_processing import remove_low_variance_features
+from lib.experiment_definitions import get_features
+from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
 
-data_dir = "/data/CULPRIT/" # noqa
-save_dir = project_root+"/output/"       # noqa
-# Minimun feature variance
+data_dir = "/data/CULPRIT/"
+save_dir = project_root+"/output/"     
+# eICU data root (folder containing eicu-collaborative-research-database-2.0),
+# same location as in eICU_extract_CS_patients.py
+eicu_data_dir = Path(project_root).parents[1] / "data"
+# eICU label, one of lib.eICU_processing.EICU_OUTCOMES:
+# "in_hospital_death" (submitted manuscript), "in_hospital_death_30d_icu",
+# "in_hospital_death_30d_hospital", "icu_death"
+eicu_outcome = "in_hospital_death"
+# Minimum feature variance
 variance_ths = 0.10
 # Set random state
 random_state = 23
@@ -97,17 +106,16 @@ admission_model = get_inner_loop_optuna(X,
                                         kf_inner,
                                         params_optuna)
 
-pred_train = admission_model["model"].predict_proba(X)[:, 1]     # noqa                
+pred_train = admission_model["model"].predict_proba(X)[:, 1]                   
 # Compute test metrics
-results_admission = compute_results(1, "Admission Train (CULPRIT)", pred_train, Y, results_admission)                 # noqa
+results_admission = compute_results(1, "Admission Train (CULPRIT)", pred_train, Y, results_admission)               
 
 # %%
-X_eicu, Y_test_eicu = load_eICU(features="Admission", exclude_smokers=True,
-                                X_CULPRIT=X)
+X_eicu, Y_test_eicu = load_eICU(eicu_data_dir, "Admission", X, outcome=eicu_outcome)
 
 pred_test = admission_model["model"].predict_proba(X_eicu)[:, 1]
 # Compute metrics without removing any feature
-results_admission = compute_results(1, "Admission test (eICU)", pred_test, Y_test_eicu, results_admission)                 # noqa
+results_admission = compute_results(1, "Admission test (eICU)", pred_test, Y_test_eicu, results_admission)               
 
 # Create a dataframe to save
 results_admission = results_to_df(results_admission)
