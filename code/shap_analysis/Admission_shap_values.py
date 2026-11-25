@@ -19,9 +19,10 @@ from lib.experiment_definitions import get_features  # noqa
 from lib.data_processing import remove_low_variance_features, naming_for_shap  # noqa
 from lib.ml_utils import get_inner_loop_optuna  # noqa
 from lib.utils import ensure_dir  # noqa
+from lib.paths import CULPRIT_DIR  # noqa
 
 # %%
-data_dir = project_root.parent / "CULPRIT_data" / "202302_Jung/"  # noqa
+data_dir = CULPRIT_DIR  # see lib/paths.py
 save_dir = project_root / "output" / "shap" / "Admission_model/"
 ensure_dir(save_dir)
 # Minimun feature variance
