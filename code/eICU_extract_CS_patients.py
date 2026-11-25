@@ -97,6 +97,11 @@ del resuscitation
 
 # Dyslipidemia
 dyslipidemia = load_eicu_dyslipidemia(data_dir, merge_data["patientunitstayid"])
+print(
+    f"Dyslipidemia: {dyslipidemia['dyslipidemia'].sum()} flagged out of "
+    f"{len(dyslipidemia)} patients with a pre-admission lipid lab "
+    f"(cohort: {merge_data['patientunitstayid'].nunique()} patients)"
+)
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, dyslipidemia, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)

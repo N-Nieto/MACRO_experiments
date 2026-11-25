@@ -297,16 +297,32 @@ def load_eicu_defibrillation(root_dir: str) -> pd.DataFrame:
     return treatment
 
 
+# Dyslipidemia cut-offs in mg/dL (the unit used by eICU for lipid labs).
+# Triglycerides 150 mg/dL == 1.7 mmol/L.
+DYSLIPIDEMIA_CUTOFFS_MG_DL = {
+    "triglycerides": 150.0,  # dyslipidemia if above
+    "HDL": 40.0,  # dyslipidemia if below
+    "LDL": 190.0,  # dyslipidemia if above
+}
+
+
 def load_eicu_dyslipidemia(root_dir: str, selected_patients: list[int]) -> pd.DataFrame:
     """
     Load and diagnose dyslipidemia for selected patients from the eICU dataset.
+
+    A patient is flagged when any lipid value measured BEFORE ICU admission
+    meets one criterion: triglycerides > 150 mg/dL, HDL < 40 mg/dL or
+    LDL > 190 mg/dL. Repeated measurements of the same analyse are averaged.
+    An analyse that was never measured is NaN and never triggers a criterion.
+    Patients without any pre-admission lipid value are not returned (the caller
+    decides how to fill them).
 
     Args:
         root_dir (str): The root directory of the eICU dataset.
         selected_patients (List[int]): List of patient IDs to consider.
 
     Returns:
-        pd.DataFrame: Processed dyslipidemia diagnosis data.
+        pd.DataFrame: Columns ["patientunitstayid", "dyslipidemia"] (0/1).
     """
     # Get the needed columns for faster processing
     usecols = ["patientunitstayid", "labresultoffset", "labname", "labresult"]
@@ -316,44 +332,34 @@ def load_eicu_dyslipidemia(root_dir: str, selected_patients: list[int]) -> pd.Da
     # Keep only the selected patients for faster processing
     lab = lab[lab["patientunitstayid"].isin(selected_patients)]
 
-    # Remove data before afmission hour
+    # Keep only values measured before ICU admission (offset in minutes)
     lab = lab[lab["labresultoffset"] < 0]
 
-    # Define features related to lipid profile
-    features_fat = ["triglycerides", "HDL", "LDL"]
+    # Keep only lipid labs
+    features_fat = list(DYSLIPIDEMIA_CUTOFFS_MG_DL)
+    lab = lab[lab["labname"].isin(features_fat)].copy()
+    lab["labresult"] = pd.to_numeric(lab["labresult"], errors="coerce")
 
-    # Filter lab data for relevant features
-    lab = lab[lab["labname"].isin(features_fat)]
+    # One column per analyse (mean of repeated values), NaN if never measured.
+    # NOTE: the previous implementation averaged one-hot * value columns, which
+    # mixed zeros from the other analyse into each mean, turned unmeasured
+    # analyse into 0 (so "HDL < 40" fired whenever HDL was missing) and divided
+    # triglycerides by the cholesterol factor (38.67 instead of 88.57).
+    lipids = lab.pivot_table(
+        index="patientunitstayid",
+        columns="labname",
+        values="labresult",
+        aggfunc="mean",
+    ).reindex(columns=features_fat)
 
-    # Create binary columns indicating the presence of each lipid feature
-    for feature in features_fat:
-        lab[feature] = (lab["labname"] == feature).astype(int)
+    # Comparisons with NaN are False, so missing analyse never trigger
+    dyslipidemia = (
+        (lipids["triglycerides"] > DYSLIPIDEMIA_CUTOFFS_MG_DL["triglycerides"])
+        | (lipids["HDL"] < DYSLIPIDEMIA_CUTOFFS_MG_DL["HDL"])
+        | (lipids["LDL"] > DYSLIPIDEMIA_CUTOFFS_MG_DL["LDL"])
+    )
 
-    # Multiply each lab result by its corresponding binary column
-    for col in features_fat:
-        lab[col] = lab[col] * lab["labresult"]
-
-    # Harmonize units for triglycerides
-    lab["triglycerides"] = lab["triglycerides"] / 38.67
-
-    # Group if several values are present for the same patient
-    lab = lab.groupby("patientunitstayid").mean().reset_index()
-
-    # Define criteria for dyslipidemia
-    var1 = lab["triglycerides"] > 1.7
-    var2 = lab["HDL"] < 40
-    var3 = lab["LDL"] > 190
-
-    # If any of the criteria is presented, then diagnose dyslipidemia
-    lab["dyslipidemia"] = var1 | var2 | var3
-
-    # Transform binary diagnosis into 1s and 0s
-    lab["dyslipidemia"] = lab["dyslipidemia"].astype(int)
-
-    # Keep only relevant information
-    lab = lab.loc[:, ["patientunitstayid", "dyslipidemia"]]
-
-    return lab
+    return dyslipidemia.astype(int).rename("dyslipidemia").reset_index()
 
 
 def load_eicu_mechanical_ventilation(root_dir: str) -> pd.DataFrame:
