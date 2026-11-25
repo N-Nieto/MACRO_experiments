@@ -9,6 +9,7 @@ Uses only the predictions saved by the other scripts (no model is refitted):
                       code/1-model_training/missing_value_analysis/output/missing_values/{predictions,y_true,patient_ID}_<model>_base_missing.csv
     eICU              output/eICU/<model>_model/<model>_eICU_predictions.csv
                       output/eICU/BOSMAN_eICU_predictions.csv
+                      (one entry per eICU label, from the y_<label> columns)
     permutation tests output/<model>_model/<model>_permutation_test.csv
 Missing inputs are skipped with a message.
 
@@ -34,6 +35,7 @@ from lib.bootstrap import (
     read_fold_predictions,
     single_test_set,
 )
+from lib.eICU_processing import EICU_OUTCOMES
 from lib.experiment_config import OUT_N_SPLITS, QUICK, RANDOM_STATE
 from lib.paths import MISSING_VALUES_DIR, OUTPUT_DIR
 from lib.utils import ensure_dir
@@ -63,10 +65,16 @@ CV_SOURCES = {
     "Admission (missingness only)": missing_files("Admission"),
     "Full (missingness only)": missing_files("Full"),
 }
+EICU_FILES = {
+    "Admission": OUTPUT_DIR / "eICU" / "Admission_model" / "Admission_eICU_predictions.csv",
+    "Full": OUTPUT_DIR / "eICU" / "Full_model" / "Full_eICU_predictions.csv",
+    "BOS,MA2": OUTPUT_DIR / "eICU" / "BOSMAN_eICU_predictions.csv",
+}
+# One entry per model and eICU label, e.g. "Full (eICU, in_hospital_death)"
 EICU_SOURCES = {
-    "Admission (eICU)": OUTPUT_DIR / "eICU" / "Admission_model" / "Admission_eICU_predictions.csv",
-    "Full (eICU)": OUTPUT_DIR / "eICU" / "Full_model" / "Full_eICU_predictions.csv",
-    "BOS,MA2 (eICU)": OUTPUT_DIR / "eICU" / "BOSMAN_eICU_predictions.csv",
+    f"{model} (eICU, {outcome})": (file, outcome)
+    for outcome in EICU_OUTCOMES
+    for model, file in EICU_FILES.items()
 }
 PAIRS = [
     ("Full", "Admission"),
@@ -80,10 +88,13 @@ PAIRS = [
     ("Admission", "CLIP"),
     ("Admission", "CardShock"),
     ("Admission", "Admission (missingness only)"),
-    ("Full (eICU)", "BOS,MA2 (eICU)"),
-    ("Admission (eICU)", "BOS,MA2 (eICU)"),
-    ("Full (eICU)", "Admission (eICU)"),
 ]
+for outcome in EICU_OUTCOMES:
+    PAIRS += [
+        (f"Full (eICU, {outcome})", f"BOS,MA2 (eICU, {outcome})"),
+        (f"Admission (eICU, {outcome})", f"BOS,MA2 (eICU, {outcome})"),
+        (f"Full (eICU, {outcome})", f"Admission (eICU, {outcome})"),
+    ]
 
 # %% Load predictions
 predictions = {}
@@ -92,12 +103,19 @@ for name, files in CV_SOURCES.items():
         predictions[name] = read_fold_predictions(*files, n_splits=OUT_N_SPLITS)
     else:
         print(f"skipped {name}: missing {[f.name for f in files if not f.exists()]}")
-for name, file in EICU_SOURCES.items():
-    if file.exists():
-        d = pd.read_csv(file, index_col=0)
-        predictions[name] = single_test_set(d["prediction"].to_numpy(), d["y_true"].to_numpy(), d.index.to_numpy())
-    else:
+for name, (file, outcome) in EICU_SOURCES.items():
+    label = f"y_{outcome}"
+    if not file.exists():
         print(f"skipped {name}: missing {file.name}")
+        continue
+    d = pd.read_csv(file, index_col=0)
+    if label not in d:
+        print(f"skipped {name}: no {label} column in {file.name} (rerun the eICU scripts)")
+        continue
+    d = d.dropna(subset=[label])
+    predictions[name] = single_test_set(
+        d["prediction"].to_numpy(), d[label].astype(int).to_numpy(), d.index.to_numpy()
+    )
 
 # %% AUC with bootstrap CI
 rows = []
