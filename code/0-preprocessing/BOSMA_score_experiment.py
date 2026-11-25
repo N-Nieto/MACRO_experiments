@@ -14,6 +14,7 @@ from lib.eICU_data_loading import (
 from lib.eICU_features import first_day_minimum_vitals
 from lib.eICU_processing import eICU_filter_CS_patients
 from lib.paths import EICU_DIR, EICU_PREPROCESSED_DIR
+from lib.utils import ensure_dir
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
 
 root_dir = str(EICU_DIR) + "/"  # see lib/paths.py
@@ -150,7 +151,7 @@ def map_score_to_risk(score):
 patient_BOSMAN['BOSMAN_risk'] = patient_BOSMAN['BOSMAN_score'].apply(map_score_to_risk)       
 # %%
 # Save the dataframe
-EICU_PREPROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+ensure_dir(EICU_PREPROCESSED_DIR)
 patient_BOSMAN.to_csv(EICU_PREPROCESSED_DIR / "BOSMAN_info.csv")
 
 # %%

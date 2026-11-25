@@ -8,7 +8,7 @@ MIN_GROUP values report their count only. No patient-level values are written.
 
 Run from this folder:
     uv run python check_lab_units.py [--culprit-dir PATH] [--eicu-dir PATH]
-Output: output/data_checks/lab_units_report.md
+Output: output/rev2/data_checks/lab_units_report.md (lib/paths.OUTPUT_DIR)
 """
 
 # %%
@@ -24,6 +24,7 @@ sys.path.append(str(REPO_DIR / "code"))
 from lib.data_load_utils import load_CULPRIT_data  # noqa: E402
 from lib.experiment_definitions import get_features  # noqa: E402
 from lib.paths import CULPRIT_DIR, EICU_DIR, OUTPUT_DIR  # noqa: E402
+from lib.utils import ensure_dir  # noqa: E402
 
 MIN_GROUP = 10
 QUANTILES = [0.05, 0.25, 0.5, 0.75, 0.95]
@@ -180,7 +181,7 @@ if __name__ == "__main__":
         report.append("\n")
 
     save_dir = OUTPUT_DIR / "data_checks"
-    save_dir.mkdir(parents=True, exist_ok=True)
+    ensure_dir(save_dir)
     (save_dir / "lab_units_report.md").write_text("".join(report))
     print("".join(report))
     print(f"Written to {save_dir / 'lab_units_report.md'}")

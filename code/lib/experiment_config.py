@@ -5,8 +5,8 @@ the same cohort, cross-validation and XGBoost search space.
 
 Quick mode: set the environment variable MACRO_QUICK=1 to run any script with
 tiny settings (3 Optuna trials, 1 CV repetition, 2 permutations). Results then
-go to output_quick/ instead of output/ (see lib/paths.py), so a smoke run on
-the real data never overwrites the real results.
+go to output_quick/rev2/ instead of output/rev2/ (see lib/paths.py), so a smoke
+run on the real data never overwrites the real results.
 """
 
 import os
