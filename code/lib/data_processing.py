@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
@@ -6,7 +7,10 @@ from sklearn.feature_selection import VarianceThreshold
 
 
 def randomly_replace_with_nan(
-    df: pd.DataFrame, prob: float = 0.1, basic_features: list | None = None
+    df: pd.DataFrame,
+    prob: float = 0.1,
+    basic_features: list | None = None,
+    rng: np.random.Generator | None = None,
 ) -> pd.DataFrame:
     """
     Randomly replaces values in the DataFrame with NaN based
@@ -19,6 +23,7 @@ def randomly_replace_with_nan(
                       Default is 0.1 (10%).
         basic_features (list): List of feature names that
                                should never be replaced with NaN.
+        rng (np.random.Generator): Random generator, for reproducibility.
 
     Returns:
         pandas.DataFrame: The DataFrame with some values
@@ -27,7 +32,9 @@ def randomly_replace_with_nan(
     # Generate a random mask based on the specified probability
     if basic_features is None:
         basic_features = []
-    mask = np.random.rand(*df.shape) < prob
+    if rng is None:
+        rng = np.random.default_rng()
+    mask = rng.random(df.shape) < prob
 
     # Set the elements in basic_features to False in the mask to
     # prevent NaN replacement
@@ -123,42 +130,54 @@ def naming_for_shap(data_dir: Path, data: pd.DataFrame) -> pd.DataFrame:
 
 
 def remove_random_features_fix_number(
-    df: pd.DataFrame, features_num: int, basic_features: list | None = None
+    df: pd.DataFrame,
+    features_num: int,
+    basic_features: Iterable[str] | None = None,
+    rng: np.random.Generator | None = None,
 ) -> pd.DataFrame:
     """
-    Remove the same number of features from the DataFrame for each row randomly,
-    leaving the values of basic_features unchanged.
+    For every row, set ``features_num`` randomly chosen features to NaN,
+    never touching ``basic_features``. Each row gets its own random choice.
+
+    The input DataFrame is NOT modified: a masked copy is returned. (The
+    previous implementation wrote NaNs into its input, so calling it in a loop
+    on the same DataFrame accumulated removals across iterations.)
+
+    A chosen feature that is already missing stays missing, so (as in the
+    worst/best-case scenarios) "removed" means "set to missing".
 
     Parameters:
         df (pandas.DataFrame): The input DataFrame.
-        features_num (int): The number of features to be removed for each row.
-        basic_features (list): List of feature names that
-                               should never be removed.
+        features_num (int): Number of features to remove per row (capped at
+                            the number of removable features).
+        basic_features (Iterable[str]): Features that are never removed.
+        rng (np.random.Generator): Random generator, for reproducibility.
+                                   Defaults to a fresh, unseeded generator.
 
     Returns:
-        pandas.DataFrame: The DataFrame with the same number of features randomly removed for each row.
+        pandas.DataFrame: Copy of ``df`` with ``features_num`` features
+                          set to NaN in every row.
     """
-    # Determine the available features excluding basic_features
-    if basic_features is None:
-        basic_features = []
-    available_features = list(set(df.columns) - set(basic_features))
+    if rng is None:
+        rng = np.random.default_rng()
+    basic = set(basic_features) if basic_features is not None else set()
 
-    # Ensure the specified number of features to remove
-    # is not greater than the available features
-    features_num = min(features_num, len(available_features))
+    # Column order (not set order) keeps the choice reproducible for a given rng
+    available = [col for col in df.columns if col not in basic]
+    features_num = min(features_num, len(available))
+    if features_num <= 0 or df.empty:
+        return df.copy()
 
-    # Iterate through each row and drop
-    # the specified number of features randomly
-    for i in range(df.shape[0]):
-        # Shuffle the order of available features
-        shuffled_features = np.random.choice(
-            available_features, size=features_num, replace=False
-        )
+    available_pos = np.array([df.columns.get_loc(col) for col in available])
+    # Independent random permutation of the removable features for each row;
+    # the first ``features_num`` of each permutation are removed.
+    order = np.argsort(rng.random((len(df), len(available))), axis=1)
+    removed_pos = available_pos[order[:, :features_num]]
 
-        # Drop the identified features for the current row
-        df.iloc[i, df.columns.isin(shuffled_features)] = np.nan
+    mask = np.zeros(df.shape, dtype=bool)
+    mask[np.arange(len(df))[:, None], removed_pos] = True
 
-    return df
+    return df.mask(mask)
 
 
 # Function to round each column of X with different number of digits
