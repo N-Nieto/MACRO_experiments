@@ -16,7 +16,7 @@ import numpy as np
 import optuna
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data
 from lib.experiment_config import (
     INNER_N_SPLITS,

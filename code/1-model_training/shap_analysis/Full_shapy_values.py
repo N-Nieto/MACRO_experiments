@@ -5,7 +5,7 @@ Full_model/Full_model_experiment.py (no refitting: the explained models are
 the ones whose performance is reported). Every patient is explained by the
 model of the fold where it was a test patient, once per CV repetition.
 
-Outputs (output/shap/Full_model/, file names as read by plot/plot_shap.ipynb):
+Outputs (output/shap/Full_model/, file names as read by 2-plotting/plot_shap.ipynb):
     shap_24hs_values, shap_24hs_baseline, shap_24hs_data   pickled arrays; values and
         baseline are the mean over the CV repetitions
     shap_loop_results24hs   per repetition: [values, baseline, data]
@@ -19,7 +19,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data
 from lib.data_processing import naming_for_shap
 from lib.experiment_config import (

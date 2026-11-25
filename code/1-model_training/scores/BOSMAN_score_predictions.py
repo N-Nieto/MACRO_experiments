@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.ml_utils import compute_results, results_to_df
 from lib.paths import EICU_PREPROCESSED_DIR, OUTPUT_DIR
 from lib.utils import ensure_dir

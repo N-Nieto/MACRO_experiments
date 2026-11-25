@@ -6,7 +6,7 @@ differences between models, and permutation-test p-values.
 Uses only the predictions saved by the other scripts (no model is refitted):
     CULPRIT-SHOCK CV  output/<model>_model/<model>_{predictions,y_true,patient_ID}.csv
                       output/scores/<score>_{predictions,y_true,patient_ID}.csv
-                      code/missing_value_analysis/output/missing_values/{predictions,y_true,patient_ID}_<model>_base_missing.csv
+                      code/1-model_training/missing_value_analysis/output/missing_values/{predictions,y_true,patient_ID}_<model>_base_missing.csv
     eICU              output/eICU/<model>_model/<model>_eICU_predictions.csv
                       output/eICU/BOSMAN_eICU_predictions.csv
     permutation tests output/<model>_model/<model>_permutation_test.csv

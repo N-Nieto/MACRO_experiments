@@ -30,4 +30,6 @@ OUTPUT_DIR = REPO_DIR / (
 )
 
 # Missing-value baseline results are kept next to their script
-MISSING_VALUES_DIR = REPO_DIR / "code" / "missing_value_analysis" / OUTPUT_DIR.name / "missing_values"
+MISSING_VALUES_DIR = (
+    REPO_DIR / "code" / "1-model_training" / "missing_value_analysis" / OUTPUT_DIR.name / "missing_values"
+)

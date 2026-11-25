@@ -1,14 +1,14 @@
 # %%
 """
-External validation of the Full model in the eICU cardiogenic-shock cohort:
+External validation of the Admission model in the eICU cardiogenic-shock cohort:
 the model is tuned and trained on all CULPRIT-SHOCK patients of its cohort
 (same search space as the main experiment) and applied once to eICU.
 
 Requires the preprocessed eICU cohort (eICU_extract_CS_patients.py).
-Outputs (output/eICU/Full_model/):
-    Full_performance_CULPRIT_eICU.csv   metrics, eICU test and CULPRIT train
-    Full_eICU_predictions.csv           eICU prediction per patientunitstayid
-    Full_CULPRIT_model.json             fitted XGBoost model
+Outputs (output/eICU/Admission_model/):
+    Admission_performance_CULPRIT_eICU.csv   metrics, eICU test and CULPRIT train
+    Admission_eICU_predictions.csv           eICU prediction per patientunitstayid
+    Admission_CULPRIT_model.json             fitted XGBoost model
 """
 import sys
 from pathlib import Path
@@ -17,7 +17,7 @@ import optuna
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data, load_eICU
 from lib.experiment_config import (
     INNER_N_SPLITS,
@@ -33,7 +33,7 @@ from lib.utils import ensure_dir
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
-model_name = "Full"
+model_name = "Admission"
 save_dir = OUTPUT_DIR / "eICU" / f"{model_name}_model"
 ensure_dir(save_dir)
 # eICU data root (folder containing eicu-collaborative-research-database-2.0),

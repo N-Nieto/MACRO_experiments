@@ -21,7 +21,7 @@ def load_CULPRIT_data(data_dir: Path, harmonize: bool = True) -> pd.DataFrame:
     Parameters:
         data_dir (str): The directory path where the data is located.
         harmonize (bool): Apply the unit harmonization (default). False returns
-            the raw lab values, e.g. to inspect units (data_checks/).
+            the raw lab values, e.g. to inspect units (0-preprocessing/check_lab_units.py).
 
     Returns:
         pd.DataFrame: Processed and harmonized CULPRIT study data.

@@ -4,7 +4,7 @@ Baseline: how much can be predicted from the missingness pattern alone?
 The features of each model are replaced by 0/1 missing-value indicators and
 the same nested CV (folds, search space) as the main experiment is run.
 
-Outputs (code/missing_value_analysis/output/missing_values/, see lib/paths.py):
+Outputs (code/1-model_training/missing_value_analysis/output/missing_values/, see lib/paths.py):
 <model>_base_missing.csv (metrics),
 predictions_<model>_base_missing.csv, y_true_<model>_base_missing.csv,
 patient_ID_<model>_base_missing.csv (one column per outer fold).
@@ -16,7 +16,7 @@ import optuna
 import pandas as pd
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data
 from lib.experiment_config import (
     INNER_N_SPLITS,

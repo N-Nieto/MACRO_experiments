@@ -13,7 +13,7 @@ import optuna
 import shap
 from sklearn.model_selection import StratifiedKFold
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data, load_eICU
 from lib.data_processing import naming_for_shap
 from lib.experiment_config import (

@@ -10,7 +10,7 @@ from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data
 from lib.data_processing import remove_random_features_fix_number
 from lib.experiment_config import (

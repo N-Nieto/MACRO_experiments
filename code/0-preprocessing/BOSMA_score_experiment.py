@@ -1,7 +1,11 @@
 # %%
 import os
+import sys
+from pathlib import Path
 
 import pandas as pd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from lib.eICU_data_loading import (
     load_eicu_diagnosis,
     load_eicu_mechanical_ventilation,

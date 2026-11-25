@@ -19,7 +19,7 @@ import pandas as pd
 import shap
 from xgboost import XGBClassifier
 
-sys.path.append(str(Path(__file__).resolve().parent))
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from lib.data_load_utils import load_CULPRIT_data
 from lib.experiment_config import RANDOM_STATE, get_model_data
 from lib.paths import CULPRIT_DIR, OUTPUT_DIR

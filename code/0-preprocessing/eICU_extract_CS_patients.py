@@ -9,7 +9,12 @@ Outputs:
     output/data_checks/eicu_feature_coverage.md   availability per feature and
         source, matched eICU strings (aggregate counts only)
 """
+import sys
+from pathlib import Path
+
 import pandas as pd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from lib.eICU_data_loading import (
     load_eicu_24hs_features,
     load_eicu_diagnosis,

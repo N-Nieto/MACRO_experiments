@@ -8,7 +8,7 @@ mortality. The scores are evaluated with the same outer cross-validation
 folds as the Full model (same cohort: patients alive after 24 h, same random
 state), using in every fold the patients who have the score. Because the
 folds are shared, the out-of-fold predictions can be compared with the Full
-model patient by patient (analysis/bootstrap_ci.py).
+model patient by patient (2-plotting/bootstrap_ci.py).
 
 Outputs (output/scores/):
     <score>.csv                metrics per fold (threshold 0.5); rows with
@@ -24,7 +24,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import RepeatedStratifiedKFold
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from lib.data_load_utils import load_CULPRIT_data
 from lib.experiment_config import (
     ENDPOINT,
