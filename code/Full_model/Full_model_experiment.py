@@ -25,12 +25,13 @@ from lib.ml_utils import (
     results_to_df,
     save_best_model_params,
 )
+from lib.paths import CULPRIT_DIR
 from lib.utils import ensure_dir
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
-# Data is stored outside the project
-data_dir = project_dir.parents[1] / "Data MODS" / "data" / "CULPRIT/"
+# Data is stored outside the project (see lib/paths.py)
+data_dir = CULPRIT_DIR
 save_dir = project_dir / "output" / "Full_model/"
 ensure_dir(save_dir)
 # Fitted model of every outer fold (XGBoost JSON), for post-hoc analyses
