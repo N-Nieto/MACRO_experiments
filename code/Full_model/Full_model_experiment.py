@@ -10,12 +10,19 @@ from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-project_dir = Path.cwd().parents[1]
-sys.path.append(str(project_dir / "code/"))
-from lib.data_load_utils import get_data_from_features, load_CULPRIT_data
-from lib.data_processing import (
-    remove_low_variance_features,
-    remove_random_features_fix_number,
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from lib.data_load_utils import load_CULPRIT_data
+from lib.data_processing import remove_random_features_fix_number
+from lib.experiment_config import (
+    ENDPOINT,
+    INNER_N_SPLITS,
+    OUT_N_REPETITIONS,
+    OUT_N_SPLITS,
+    RANDOM_STATE,
+    THS_RANGE,
+    VARIANCE_THS,
+    get_model_data,
+    get_params_optuna,
 )
 from lib.experiment_definitions import get_features, get_important_features
 from lib.ml_utils import (
@@ -25,92 +32,47 @@ from lib.ml_utils import (
     results_to_df,
     save_best_model_params,
 )
-from lib.paths import CULPRIT_DIR
+from lib.paths import CULPRIT_DIR, OUTPUT_DIR
 from lib.utils import ensure_dir
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
-# Data is stored outside the project (see lib/paths.py)
+# Data is stored outside the project (see lib/paths.py); settings shared by
+# all experiments are in lib/experiment_config.py
 data_dir = CULPRIT_DIR
-save_dir = project_dir / "output" / "Full_model/"
+save_dir = OUTPUT_DIR / "Full_model"
 ensure_dir(save_dir)
 # Fitted model of every outer fold (XGBoost JSON), for post-hoc analyses
 models_dir = save_dir / "fold_models"
 ensure_dir(models_dir)
 
-
-# Minimun feature variance
-variance_ths = 0.10
 # Set random state
-random_state = 23
+random_state = RANDOM_STATE
 # Random generator for the random feature-removal scenario
 rng = np.random.default_rng(random_state)
 
 # Cross validation parameters
-out_n_splits = 10
-out_n_repetitions = 10
-
+out_n_splits = OUT_N_SPLITS
+out_n_repetitions = OUT_N_REPETITIONS
 # Inner CV
-inner_n_splits = 3
+inner_n_splits = INNER_N_SPLITS
 
-# Define the hyperparameters to tune
-params_optuna = {
-    "objective": "binary:logistic",
-    "eval_metric": "auc",
-    "optuna_trials": 100,
-    "random_state": random_state,
-    "max_depth_min": 1,
-    "max_depth_max": 5,
-    "alpha_min": 1e-8,
-    "alpha_max": 10,
-    "lambda_min": 1e-8,
-    "lambda_max": 100,
-    "eta_min": 0.1,
-    "eta_max": 1,
-    "early_stopping_rounds": 100,
-    "num_boost_round": 10000,
-}
+# Hyperparameter search space (Supplementary Table 10)
+params_optuna = get_params_optuna("Full")
 
 # number of thresholds used
-ths_range = list(np.linspace(0, 1, 101))
+ths_range = THS_RANGE
 
 # Data load and pre-processing
-
-# Get different features depending on the model
-# Get all data
 patient_info = load_CULPRIT_data(data_dir)
 
-# Removing patients that died in the first 24hs
-patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
+# Full (24 h) features; patients who died in the first 24 h are excluded
+X, Y, patient_ids = get_model_data(patient_info, "Full")
 
-# Set target
-# endpoint to use
-endpoint_to_use = "fu_ce_death_le30d_yn"  # or "fu_ce_death_le365d_yn"
-y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
-Y = y.iloc[:, 1].to_numpy()
-patient_ids = y["patient_ID"].to_numpy()
-
-# Extract the 24hs features
-exp_name = "Admission"
-feature_admission = get_features(exp_name)
-X_Admission = get_data_from_features(patient_info, feature_admission)
-# Remove low variance features
-X_Admission = remove_low_variance_features(X_Admission, variance_ths)
-feature_admission = X_Admission.columns
-
-# Extract the 24hs features
-exp_name = "24hs"
-feature_24h = get_features(exp_name)
-X = get_data_from_features(patient_info, feature_24h)
-
-# Remove low variance features
-X = remove_low_variance_features(X, variance_ths)
+# Admission features kept in the random-removal scenario (only 24 h data removed)
+feature_admission = [f for f in X.columns if f in get_features("Admission")]
 
 # Final data shape
 n_participants, n_features = X.shape
-
-# Show the feature distribution
-print("24hs features: " + str(n_features))
 # %%
 kf_out = RepeatedStratifiedKFold(
     n_splits=out_n_splits, n_repeats=out_n_repetitions, random_state=random_state
@@ -144,11 +106,11 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):
     print("FOLD: " + str(i_fold))
 
     # Patients used for train and internal XGB validation
-    X_train_whole = X.iloc[train_index, :]
+    X_train_whole = X.iloc[train_index]
     Y_train_whole = Y[train_index]
 
     # Patients used to generete a prediction
-    X_test = X.iloc[test_index, :]
+    X_test = X.iloc[test_index]
     Y_test = Y[test_index]
 
     print("Fitting Full model")
@@ -304,14 +266,15 @@ experiment_setting = {
     "save_dir": save_dir,
     "random_state": random_state,
     "out_n_splits": out_n_splits,
-    "endpoint_to_use": endpoint_to_use,
+    "endpoint_to_use": ENDPOINT,
     "out_n_repetitions": out_n_repetitions,
     "inner_n_splits": inner_n_splits,
-    "variance_ths": variance_ths,
+    "variance_ths": VARIANCE_THS,
     "ths_range": ths_range,
     "params_optuna": params_optuna,
     "n_participants": n_participants,
     "n_features": n_features,
+    "features": list(X.columns),
     "experiment_timing": timeit.default_timer() - starttime,
 }
 

@@ -24,4 +24,7 @@ CULPRIT_DIR = DATA_DIR / "CULPRIT"
 EICU_DIR = DATA_DIR / "eicu-collaborative-research-database-2.0"
 EICU_PREPROCESSED_DIR = EICU_DIR / "preprocessed_MACRO"
 
-OUTPUT_DIR = REPO_DIR / "output"
+# MACRO_QUICK=1 (smoke runs, see lib/experiment_config.py) writes to output_quick/
+OUTPUT_DIR = REPO_DIR / (
+    "output_quick" if os.environ.get("MACRO_QUICK", "0") == "1" else "output"
+)
