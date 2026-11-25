@@ -74,3 +74,58 @@ def test_heart_function_without_patient_filter(tmp_path):
     vitals.to_csv(tmp_path / "vitalPeriodic.csv.gz", index=False)
     out = eICU_admission_heart_function(str(tmp_path) + "/", [])
     assert set(out["patientunitstayid"]) == {1, 2}
+
+
+def test_eicu_lab_units():
+    from lib.eICU_processing import harmonize_eicu_labs
+
+    lab = pd.DataFrame({"CPK": [300.0], "CRP": [1.5], "creatinine": [1.0], "ALT (SGPT)": [60.0],
+                        "troponin - T": [0.5], "BNP": [800.0], "lactate": [3.0]})
+    out = harmonize_eicu_labs(lab)
+    assert out.loc[0, "CPK"] == 300.0  # U/L
+    assert out.loc[0, "CRP"] == 15.0  # mg/dL -> mg/L
+    assert out.loc[0, "creatinine"] == 88.42
+    assert out.loc[0, "ALT (SGPT)"] == pytest.approx(1.0)
+    assert out.loc[0, "troponin - T"] == 500.0
+    assert out.loc[0, "lactate"] == 3.0
+    assert out.loc[0, "BNP"] == 800.0  # converted later, eicu_bnp_to_ntprobnp
+
+
+def test_bnp_to_ntprobnp_options():
+    from lib.eICU_processing import (
+        eicu_bnp_to_ntprobnp,
+        ishihara_ntprobnp,
+        japanese_egfr,
+    )
+
+    # Ishihara 2022 reproduces the paper's medians (BNP 55.5 -> ~200 pg/mL)
+    assert 150 < ishihara_ntprobnp(55.5, 23.4, 60.9) < 300
+    assert japanese_egfr(1.0, 60, False) == pytest.approx(194 * 60**-0.287)
+    df = pd.DataFrame({
+        "BNP": [1000.0, np.nan, 500.0],
+        "creatinine": [88.42, 100.0, np.nan],  # umol/L
+        "age": [60, 70, 80], "gender": [1, 0, 1],
+        "admissionheight": [170.0, 160.0, np.nan], "admissionweight": [70.0, 60.0, 80.0],
+    })
+    out = eicu_bnp_to_ntprobnp(df)
+    egfr = 194 * 60**-0.287
+    bmi = 70 / 1.7**2
+    assert out.loc[0, "BNP"] == pytest.approx(10 ** (1.21 + 1.03 * 3 - 0.009 * bmi - 0.007 * egfr))
+    assert np.isnan(out.loc[1, "BNP"])
+    assert out.loc[2, "BNP"] > 500  # missing covariates -> cohort medians
+    assert eicu_bnp_to_ntprobnp(df, "ratio").loc[0, "BNP"] == 6250.0
+    assert eicu_bnp_to_ntprobnp(df, "as_is").loc[0, "BNP"] == 1000.0
+    assert "BNP" not in eicu_bnp_to_ntprobnp(df, "missing")
+    with pytest.raises(ValueError):
+        eicu_bnp_to_ntprobnp(df, "quantile")
+
+
+def test_quantile_match():
+    from lib.data_load_utils import quantile_match
+
+    ref = pd.Series(np.arange(1, 1001, dtype=float))
+    values = pd.Series([1.0, np.nan, 100.0, 10.0])
+    out = quantile_match(values, ref)
+    assert np.isnan(out[1])
+    assert out[0] < out[3] < out[2]  # order kept
+    np.testing.assert_allclose(out.dropna().sort_values(), np.quantile(ref, [1 / 6, 3 / 6, 5 / 6]))
