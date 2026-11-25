@@ -1,8 +1,8 @@
-import os
+from collections.abc import Iterable, Sequence
 
-import joblib
 import numpy as np
 import pandas as pd
+from lib.experiment_definitions import get_features
 
 
 def eICU_filter_CS_patients(data, CICU=True):
@@ -15,15 +15,37 @@ def eICU_filter_CS_patients(data, CICU=True):
     return CS_patients
 
 
-def eICU_admission_heart_function(
-    root_dir,
-    plausible_range,
-    selected_patients=None,
-    time_before_cut_off=60,
-    time_after_cut_off=-1440,
-    prefilter=True,
-):
+def _read_csv_for_patients(
+    file_path: str,
+    usecols: list[str],
+    selected_patients: pd.Series | Iterable[int],
+    chunksize: int = 5_000_000,
+) -> pd.DataFrame:
+    """Read a (large) eICU table in chunks, keeping only the selected patients."""
+    selected = set(pd.Series(list(selected_patients)).tolist())
+    chunks = [
+        chunk[chunk["patientunitstayid"].isin(selected)]
+        for chunk in pd.read_csv(file_path, usecols=usecols, chunksize=chunksize)
+    ]
+    return pd.concat(chunks, ignore_index=True)
 
+
+def eICU_admission_heart_function(
+    root_dir: str,
+    plausible_range: Sequence[tuple[float, float, str]],
+    selected_patients: pd.Series | Iterable[int] | None = None,
+    time_before_cut_off: int = 60,
+    time_after_cut_off: int = -1440,
+) -> pd.DataFrame:
+    """
+    Median heart rate and invasive systolic/diastolic pressure per patient in
+    the window (time_after_cut_off, time_before_cut_off) minutes around ICU
+    admission, after removing values outside ``plausible_range``.
+
+    Reads the raw eICU ``vitalPeriodic.csv.gz``. Pass ``selected_patients``
+    (e.g. the CS cohort) to read it in chunks and keep only those patients,
+    which avoids loading the whole table (~146 M rows) into memory.
+    """
     usecols = [
         "patientunitstayid",
         "observationoffset",
@@ -31,21 +53,11 @@ def eICU_admission_heart_function(
         "systemicsystolic",
         "systemicdiastolic",
     ]
-    # Load the pre-filtered data for faster processing
-    if prefilter:
-        heart_data = pd.read_csv(
-            root_dir + "vitalPeriodic_selected_MACRO.csv.gz",
-            usecols=usecols,
-        )
+    file_path = root_dir + "vitalPeriodic.csv.gz"
+    if selected_patients is None:
+        heart_data = pd.read_csv(file_path, usecols=usecols)
     else:
-        # Load the raw data and keep the selected patients
-        selected_patients = selected_patients.tolist()
-        heart_data = pd.read_csv(
-            root_dir + "vitalPeriodic_selected_MACRO.csv.gz",
-            usecols=usecols,
-        )
-        # Keep only the CS patients for faster processing
-        heart_data = heart_data[heart_data["patientunitstayid"].isin(selected_patients)]
+        heart_data = _read_csv_for_patients(file_path, usecols, selected_patients)
     # Remove the data after one Hour
     heart_data = heart_data[heart_data["observationoffset"] < time_before_cut_off]
     # Remove data older than one day
@@ -189,108 +201,96 @@ def eicul_ALAT_harmonization(alat):
     return alat / 60  # Conversion factor: 1 U/L = 0.01667 microkat/L
 
 
+# eICU column name -> CULPRIT-SHOCK feature name (as used in experiment_definitions)
+EICU_ADMISSION_NAME_MAPPING = {
+    "gender": "had_dem_male_yn",
+    "age": "had_dem_age_yr",
+    "admissionheight": "had_pex_height_cm",
+    "admissionweight": "had_pex_weight_kg",
+    "Atrial fibrillation": "hpr_ecg_afib_y",
+    "hypertension requiring treatment": "p_rf_aht_yn",
+    "insulin dependent diabetes": "p_rf_dm_yn",
+    "peripheral vascular disease": "p_mh_pad_yn",
+    "sick sinus syndrome": "hpr_ecg_sinrhy_y",
+    "Known coronary artery disease": "previous_heart_complications",
+    "delusional": "had_sy_ams_yn",
+    "extremities cold": "had_sy_extremity_yn",
+    "Resuscitation within 24hs": "had_base_cpr24h_yn",
+    "dyslipidemia": "p_rf_dyslip_yn",
+    "mechanical_ventilation": "had_base_mechvent_yn",
+    "ST_elevation": "hpr_ecg_stemi_yn",
+    "heartrate": "hpr_hmdyn_hr_bpm",
+    "systemicsystolic": "hpr_hmdyn_sbp_mmhg",
+    "systemicdiastolic": "hpr_hmdyn_dbp_mmhg",
+}
+
+# The lactate columns (admission_lactate, icu_lab_lact8/16/24hpci_x) and
+# hpe_proc_mechs_yn are already created with their CULPRIT-SHOCK names.
+EICU_FULL_NAME_MAPPING = {
+    **EICU_ADMISSION_NAME_MAPPING,
+    "BNP": "pbnp",  # NOTE: eICU reports BNP, CULPRIT-SHOCK NT-proBNP
+    "CPK": "icu_lab_ck_x",
+    "troponin - T": "tnt",
+    "creatinine": "creatine",
+    "WBC x 1000": "white_cell_count",
+    "Hct": "hematocrit",
+    "CRP": "crp",
+    "PT - INR": "icu_lab_inr_r",
+    "glucose": "glucose",
+    "ALT (SGPT)": "alat",
+}
+
+
+def _rename_and_order(
+    data: pd.DataFrame, mapping: dict[str, str], exp_name: str
+) -> pd.DataFrame:
+    """
+    Rename eICU columns to CULPRIT-SHOCK names and order them as in
+    experiment_definitions.get_features(exp_name).
+
+    Features of the experiment that do not exist in eICU are added as all-NaN
+    columns; eICU columns that are not features of the experiment are dropped.
+    The low-variance filter applied in CULPRIT-SHOCK is NOT applied here: align
+    to a trained model with ``X_eicu.reindex(columns=X_culprit.columns)``
+    (done in lib.data_load_utils.load_eICU).
+    """
+    features = get_features(exp_name)
+    renamed = data.rename(columns=mapping)
+    missing = [f for f in features if f not in renamed.columns]
+    if missing:
+        print(f"[{exp_name}] features not available in eICU (all NaN): {missing}")
+    return renamed.reindex(columns=features)
+
+
 def admission_name_matching(X_admission: pd.DataFrame) -> pd.DataFrame:
     """
-    Map column names from X_admission to a predefined set of column names
-    and return the features corresponding to the feature names
-    expected by the admission model.
+    Rename eICU admission columns to CULPRIT-SHOCK names and return them in
+    the order of the "Admission" experiment features.
+
+    The feature list comes from lib.experiment_definitions, so no trained model
+    has to be loaded.
 
     Args:
-        X_admission (pd.DataFrame): Input DataFrame containing admission data.
+        X_admission (pd.DataFrame): eICU admission data with eICU column names.
 
     Returns:
-        pd.DataFrame: DataFrame containing the admission data corrected.
+        pd.DataFrame: Admission features with CULPRIT-SHOCK names.
     """
-    # Define mapping from original column names to model feature names
-    admission_colume_mapping = {
-        "gender": "had_dem_male_yn",
-        "age": "had_dem_age_yr",
-        "admissionheight": "had_pex_height_cm",
-        "admissionweight": "had_pex_weight_kg",
-        "Atrial fibrillation": "hpr_ecg_afib_y",
-        "hypertension requiring treatment": "p_rf_aht_yn",
-        "insulin dependent diabetes": "p_rf_dm_yn",
-        "peripheral vascular disease": "p_mh_pad_yn",
-        "sick sinus syndrome": "hpr_ecg_sinrhy_y",
-        "Known coronary artery disease": "previous_heart_complications",
-        "delusional": "had_sy_ams_yn",
-        "extremities cold": "had_sy_extremity_yn",
-        "Resuscitation within 24hs": "had_base_cpr24h_yn",
-        "dyslipidemia": "p_rf_dyslip_yn",
-        "mechanical_ventilation": "had_base_mechvent_yn",
-        "ST_elevation": "hpr_ecg_stemi_yn",
-        "heartrate": "hpr_hmdyn_hr_bpm",
-        "systemicsystolic": "hpr_hmdyn_sbp_mmhg",
-        "systemicdiastolic": "hpr_hmdyn_dbp_mmhg",
-    }
-
-    # Rename columns according to the mapping
-    X_admission.rename(columns=admission_colume_mapping, inplace=True)
-
-    # Load admission model
-    models_root = "/home/nnieto/Nico/MODS_project/CULPRIT_project/web_service/Synchon version/MACRO/macro/data/"
-    admission_model_path = os.path.join(models_root, "model_admission.pkl")
-    Admission_model = joblib.load(admission_model_path)
-
-    # Put the columns in the same order
-    X_admission = X_admission[Admission_model.feature_names_in_]
-
-    return X_admission
+    return _rename_and_order(X_admission, EICU_ADMISSION_NAME_MAPPING, "Admission")
 
 
 def full_model_name_matching(Full_model_data: pd.DataFrame) -> pd.DataFrame:
     """
-    Map column names from Full_model_data to a predefined set of column names
-    and return the features corresponding to the feature names
-    expected by the full model.
+    Rename eICU admission + 24 h columns to CULPRIT-SHOCK names and return them
+    in the order of the "24hs" (Full model) experiment features.
+
+    The feature list comes from lib.experiment_definitions, so no trained model
+    has to be loaded.
 
     Args:
-        Full_model_data (pd.DataFrame): Input DataFrame full model data.
+        Full_model_data (pd.DataFrame): eICU data with eICU column names.
 
     Returns:
-        pd.DataFrame: DataFrame containing Full model corrected features.
+        pd.DataFrame: Full-model features with CULPRIT-SHOCK names.
     """
-    # Define mapping from original column names to model feature names
-    colume_mapping = {
-        "gender": "had_dem_male_yn",
-        "age": "had_dem_age_yr",
-        "admissionheight": "had_pex_height_cm",
-        "admissionweight": "had_pex_weight_kg",
-        "Atrial fibrillation": "hpr_ecg_afib_y",
-        "hypertension requiring treatment": "p_rf_aht_yn",
-        "insulin dependent diabetes": "p_rf_dm_yn",
-        "peripheral vascular disease": "p_mh_pad_yn",
-        "sick sinus syndrome": "hpr_ecg_sinrhy_y",
-        "Known coronary artery disease": "previous_heart_complications",
-        "delusional": "had_sy_ams_yn",
-        "extremities cold": "had_sy_extremity_yn",
-        "Resuscitation within 24hs": "had_base_cpr24h_yn",
-        "dyslipidemia": "p_rf_dyslip_yn",
-        "mechanical_ventilation": "had_base_mechvent_yn",
-        "ST_elevation": "hpr_ecg_stemi_yn",
-        "heartrate": "hpr_hmdyn_hr_bpm",
-        "systemicsystolic": "hpr_hmdyn_sbp_mmhg",
-        "systemicdiastolic": "hpr_hmdyn_dbp_mmhg",
-        "BNP": "pbnp",
-        "CPK": "icu_lab_ck_x",
-        "troponin - T": "tnt",
-        "creatinine": "creatine",
-        "WBC x 1000": "white_cell_count",
-        "Hct": "hematocrit",
-        "CRP": "crp",
-        "PT - INR": "icu_lab_inr_r",
-        "glucose": "glucose",
-        "ALT (SGPT)": "alat",
-    }
-    # Rename columns according to the mapping
-    Full_model_data.rename(columns=colume_mapping, inplace=True)
-
-    # Load full model
-    models_root = "/home/nnieto/Nico/MODS_project/CULPRIT_project/web_service/Synchon version/MACRO/macro/data/"
-    full_model_path = os.path.join(models_root, "model_full.pkl")
-    Full_model = joblib.load(full_model_path)
-
-    # order the features
-    Full_model_data = Full_model_data[Full_model.feature_names_in_]
-
-    return Full_model_data
+    return _rename_and_order(Full_model_data, EICU_FULL_NAME_MAPPING, "24hs")

@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterable
 
 import pandas as pd
 from lib.eICU_processing import (
@@ -306,7 +307,9 @@ DYSLIPIDEMIA_CUTOFFS_MG_DL = {
 }
 
 
-def load_eicu_dyslipidemia(root_dir: str, selected_patients: list[int]) -> pd.DataFrame:
+def load_eicu_dyslipidemia(
+    root_dir: str, selected_patients: pd.Series | Iterable[int]
+) -> pd.DataFrame:
     """
     Load and diagnose dyslipidemia for selected patients from the eICU dataset.
 
@@ -319,7 +322,8 @@ def load_eicu_dyslipidemia(root_dir: str, selected_patients: list[int]) -> pd.Da
 
     Args:
         root_dir (str): The root directory of the eICU dataset.
-        selected_patients (List[int]): List of patient IDs to consider.
+        selected_patients (pd.Series | Iterable[int]): patientunitstayid values
+            to consider (e.g. merge_data["patientunitstayid"]).
 
     Returns:
         pd.DataFrame: Columns ["patientunitstayid", "dyslipidemia"] (0/1).

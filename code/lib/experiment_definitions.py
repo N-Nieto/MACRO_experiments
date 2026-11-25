@@ -197,7 +197,7 @@ def get_important_features(exp_name: str) -> list[str]:
             "icu_lab_ck_x",
         ]
 
-    if exp_name == "Admission_less_features":
+    elif exp_name == "Admission_less_features":
         # Direct order of importance
         features_list = [
             "p_rf_dyslip_yn",

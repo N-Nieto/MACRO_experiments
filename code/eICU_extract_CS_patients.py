@@ -137,7 +137,12 @@ plausible_range = [
     (20, 200, "systemicdiastolic"),
 ]
 
-HR = eICU_admission_heart_function(data_dir, plausible_range, time_before_cut_off=30)
+HR = eICU_admission_heart_function(
+    data_dir,
+    plausible_range,
+    selected_patients=merge_data["patientunitstayid"],
+    time_before_cut_off=30,
+)
 merge_data = pd.merge(merge_data, HR, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 
@@ -161,6 +166,7 @@ X_admission = merge_data.drop(
 )
 
 X_admission = admission_name_matching(X_admission)
+# %%
 X_admission.to_csv(save_dir + "X_admission_CICU.csv")
 y_eicu.to_csv(save_dir + "y_CICU.csv")
 
@@ -193,3 +199,5 @@ Full_model_data.to_csv(save_dir + "X_Full_CICU.csv")
 
 # %%
 print("DONE!")
+
+# %%
