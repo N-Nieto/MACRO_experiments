@@ -1,24 +1,24 @@
 # %%
-import pandas as pd
-import numpy as np
 import os
 import sys
-from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold    # noqa
+
+import numpy as np
+import pandas as pd
 from sklearn.linear_model import LogisticRegressionCV
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 # Append project path for using the functions in lib
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.append(project_root+"/code/")
 
-from lib.unit_harmonization import lactate_unit_harmonization                       # noqa
-from lib.data_load_utils import create_unique_patient_ID, create_admission_lactate  # noqa
-from lib.ml_utils import compute_results, results_to_df       # noqa
-
+from lib.data_load_utils import create_admission_lactate, create_unique_patient_ID
+from lib.ml_utils import compute_results, results_to_df
+from lib.unit_harmonization import lactate_unit_harmonization
 
 # %%
 save_dir = project_root+"/output/"
 # Load main data
-data = pd.read_excel(project_root + "/data/CULPRIT-data_20210407.xlsx",      # noqa
+data = pd.read_excel(project_root + "/data/CULPRIT-data_20210407.xlsx",    
                      sheet_name=None)
 
 # Extract patient data
@@ -37,7 +37,7 @@ lab_info = create_unique_patient_ID(lab_info)
 # Keep the information for the first day.
 lab_info = lab_info[lab_info["icu_lab_day_text"] == 1]
 # The day information is not longer required
-lab_info.drop(columns="icu_lab_day_text", inplace=True)
+lab_info = lab_info.drop(columns="icu_lab_day_text")
 
 # Load clip data
 clip_info = data["clip"]
@@ -49,7 +49,7 @@ clip_info = create_unique_patient_ID(clip_info)
 # Get clip information only for TIME V1 == Admission
 clip_info = clip_info[clip_info["time"] == "V1"]
 # Time information is not longer required
-clip_info.drop(columns="time", inplace=True)
+clip_info = clip_info.drop(columns="time")
 
 # First merge patient and lab data
 data_final = pd.merge(patient_info, lab_info, on="patient_ID")
@@ -61,7 +61,7 @@ data_final = lactate_unit_harmonization(data_final)
 # %%
 missing_values = data_final[['had_dem_age_yr', 'had_sy_ams_yn', 'p_mh_mi_yn',
                              'hpr_echo_lvef_pct',
-                             'admission_lactate', 'ckdepi']].isnull().any(axis=1)       # noqa
+                             'admission_lactate', 'ckdepi']].isnull().any(axis=1)     
 
 # %% Create the score
 # Initialize a Series to store the scores
@@ -83,10 +83,10 @@ scores += 1
 scores[~missing_values] += (data_final['hpr_echo_lvef_pct'] < 40).astype(int)
 
 # Blood lactate
-scores[~missing_values] += (data_final['admission_lactate'] > 4) + (data_final['admission_lactate'] > 2)                    # noqa
+scores[~missing_values] += (data_final['admission_lactate'] > 4) + (data_final['admission_lactate'] > 2)                  
 
 # eGFR CKD-EPI
-scores[~missing_values] += (data_final['ckdepi'] < 30) + ((data_final['ckdepi'] >= 30) & (data_final['ckdepi'] <= 60))      # noqa
+scores[~missing_values] += (data_final['ckdepi'] < 30) + ((data_final['ckdepi'] >= 30) & (data_final['ckdepi'] <= 60))    
 
 # Assign the calculated scores to the 'CardShock_Score' column
 data_final['CardShock_Score'] = scores
@@ -119,7 +119,7 @@ score_clf = LogisticRegressionCV(cv=kf_inner)
 
 # Outer loop
 
-for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # noqa
+for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):     
     print("FOLD: " + str(i_fold))
 
     # Patients used for train and internal XGB validation
@@ -137,17 +137,17 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):       # 
 
     score_clf.fit(X=X_train_whole_imputed, y=Y_train_whole)
 
-    imputed_train_proba = score_clf.predict_proba(X=X_train_whole_imputed)[:, 1]                    # noqa
-    imputed_test_proba = score_clf.predict_proba(X=X_test_imputed)[:, 1]                    # noqa
+    imputed_train_proba = score_clf.predict_proba(X=X_train_whole_imputed)[:, 1]                  
+    imputed_test_proba = score_clf.predict_proba(X=X_test_imputed)[:, 1]                  
 
-    results_by_fold = compute_results(i_fold, "CardShock_Score_test", imputed_test_proba, Y_test, results_by_fold)                                           # noqa
-    results_by_fold = compute_results(i_fold, "CardShock_Score_train", imputed_train_proba, Y_train_whole, results_by_fold)                                           # noqa
+    results_by_fold = compute_results(i_fold, "CardShock_Score_test", imputed_test_proba, Y_test, results_by_fold)                                         
+    results_by_fold = compute_results(i_fold, "CardShock_Score_train", imputed_train_proba, Y_train_whole, results_by_fold)                                         
 
 results_pt = results_to_df(results_by_fold)
 # %%
 
 # % Savng results
 print("Saving Results")
-results_pt.to_csv(save_dir+ "CardShock.csv")              # noqa
+results_pt.to_csv(save_dir+ "CardShock.csv")            
 
 # %%

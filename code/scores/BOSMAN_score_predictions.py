@@ -5,7 +5,7 @@ from lib.ml_utils import compute_results, results_to_df
 eicu_root = "/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
 
 patient_BOSMAN = pd.read_csv(eicu_root + "BOSMAN_info.csv", index_col=0)
-patient_BOSMAN.dropna(inplace=True)
+patient_BOSMAN = patient_BOSMAN.dropna()
 
 patients_CICU = pd.read_csv(eicu_root + "patients_CICU.csv", index_col=0)
 cicu_patients = patients_CICU["patientunitstayid"].to_list()
