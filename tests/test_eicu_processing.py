@@ -58,7 +58,7 @@ def test_heart_function_raw_file_branch(tmp_path):
     ).set_index("patientunitstayid")
     assert set(out.index) == {1, 2}  # patient 3 not selected
     assert out.loc[1, "heartrate"] == 110  # median of 100, 120 (offset 100 cut)
-    assert np.isnan(out.loc[2, "heartrate"])  # implausible value removed
+    assert out["heartrate"].isna().loc[2]  # implausible value removed
 
 
 def test_heart_function_without_patient_filter(tmp_path):
@@ -111,8 +111,8 @@ def test_bnp_to_ntprobnp_options():
     egfr = 194 * 60**-0.287
     bmi = 70 / 1.7**2
     assert out.loc[0, "BNP"] == pytest.approx(10 ** (1.21 + 1.03 * 3 - 0.009 * bmi - 0.007 * egfr))
-    assert np.isnan(out.loc[1, "BNP"])
-    assert out.loc[2, "BNP"] > 500  # missing covariates -> cohort medians
+    assert out["BNP"].isna().loc[1]
+    assert out["BNP"].gt(500).loc[2]  # missing covariates -> cohort medians
     assert eicu_bnp_to_ntprobnp(df, "ratio").loc[0, "BNP"] == 6250.0
     assert eicu_bnp_to_ntprobnp(df, "as_is").loc[0, "BNP"] == 1000.0
     assert "BNP" not in eicu_bnp_to_ntprobnp(df, "missing")

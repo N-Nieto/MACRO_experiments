@@ -34,3 +34,7 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.pyright]
+# lets Pylance/pyright resolve "from lib..." in scripts and tests
+extraPaths = ["code", "tests"]

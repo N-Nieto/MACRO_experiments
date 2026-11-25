@@ -1,29 +1,33 @@
-import optuna
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, TypedDict
+
 import numpy as np
+import optuna
 import pandas as pd
 import xgboost as xgb
-from typing import Dict, Union, List, Any
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import (
-    f1_score,
-    recall_score,
-    balanced_accuracy_score,
-    roc_auc_score,
-)
-from imblearn.metrics import specificity_score, sensitivity_score
+
+
+class TunedModel(TypedDict):
+    """Output of get_inner_loop_optuna."""
+
+    model: xgb.XGBClassifier
+    best_params: dict[str, Any]
 
 
 def get_inner_loop_optuna(
-    X: pd.DataFrame,
-    y: pd.Series,
+    X: pd.DataFrame | pd.Series,
+    y: np.ndarray | pd.Series,
     kf_inner: StratifiedKFold,
-    params_optuna: Dict[str, float],
-) -> Dict[str, Union[xgb.XGBClassifier, Dict[str, float]]]:
+    params_optuna: dict[str, Any],
+) -> TunedModel:
     """
     Get the best model with OPTUNA
 
     Optimize hyperparameters using Optuna for an XGBoost model and train the final model.
-    # noqa
+  
     Parameters:
         X (pd.DataFrame): The input features.
         y (pd.Series): The target variable.
@@ -32,8 +36,6 @@ def get_inner_loop_optuna(
     Returns:
         dict: A dictionary containing the final model, best hyperparameters.
     """
-    out = {}
-
     def objective(trial: optuna.Trial) -> float:
         """
         Objective function to optimize using Optuna.
@@ -73,21 +75,21 @@ def get_inner_loop_optuna(
         # put data in the right format
         dtrain = xgb.DMatrix(X, label=y)
         # allows to remove non-promising trials
-        pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-auc")  # noqa
+        pruning_callback = optuna.integration.XGBoostPruningCallback(trial, "test-auc")
 
-        cv_results = xgb.cv(
+        cv_results = pd.DataFrame(xgb.cv(
             params,
             dtrain,
             num_boost_round=params_optuna["num_boost_round"],
-            early_stopping_rounds=params_optuna["early_stopping_rounds"],  # noqa
+            early_stopping_rounds=params_optuna["early_stopping_rounds"],
             maximize=True,
             callbacks=[pruning_callback],
             folds=kf_inner,
-        )
+        ))
         # include n_estimators in trial to use it later
         trial.set_user_attr("n_estimators", len(cv_results))
 
-        best_auc = cv_results["test-auc-mean"].values[-1]
+        best_auc = float(cv_results["test-auc-mean"].iloc[-1])
 
         return best_auc
 
@@ -110,23 +112,21 @@ def get_inner_loop_optuna(
         n_estimators=study.best_trial.user_attrs["n_estimators"],
     )
     final_model.fit(X, y)
-    out["model"] = final_model
-    out["best_params"] = best_params
 
-    return out
+    return {"model": final_model, "best_params": best_params}
 
 
 def compute_results(
     i_fold: int,
     model: str,
     prob: np.ndarray,
-    y: np.ndarray,
-    result: List[List[Union[int, str, float]]],
+    y: np.ndarray | pd.Series,
+    result: list[list[Any]],
     rs: bool = False,
     rpn: int = 0,
-    ths_range: Union[float, List[float]] = 0.5,
+    ths_range: float | Sequence[float] = 0.5,
     n_removed_features: int = 0,
-) -> List[List[Union[int, str, float]]]:
+) -> list[list[Any]]:
     """
     Calculate evaluation metrics by fold and append results to the given list. # noqa
 
@@ -137,28 +137,37 @@ def compute_results(
         rpn (int): Random Permutation number.
         prob (np.ndarray): Probability predictions.
         y (np.ndarray): True labels.
-        ths_range (Union[float, List[float]]): Thresholds for binary classification.
+        ths_range (float | Sequence[float]): Thresholds for binary classification.
         n_removed_features (int): Number of removed features.
-        result (List[List[Union[int, str, float]]]): List to store the results.
+        result (list[list[Any]]): list to store the results.
 
     Returns:
-        List[List[Union[int, str, float]]]: Updated list with appended results.
+        list[list[Any]]: Updated list with appended results.
     """
-    # If a float value was provided, convert in list for iteration
-    if isinstance(ths_range, float):
+    # If a single threshold was provided, convert in list for iteration
+    if isinstance(ths_range, (int, float)):
         ths_range = [ths_range]
+
+    y = np.asarray(y).astype(int)
+    prob = np.asarray(prob, dtype=float)
+    positive = y == 1
+    n_pos = int(positive.sum())
+    n_neg = len(y) - n_pos
+    # The AUC does not depend on the threshold
+    auc = roc_auc_score(y, prob)
 
     for ths in ths_range:
         # Calculate the predictions using the passed ths
-        prediction = (prob > ths).astype(int)
+        prediction = prob > ths
+        tp = int(np.sum(prediction & positive))
+        fp = int(np.sum(prediction & ~positive))
 
-        # Compute all the metrics
-        bacc = balanced_accuracy_score(y, prediction)
-        auc = roc_auc_score(y, prob)
-        f1 = f1_score(y, prediction)
-        specificity = specificity_score(y, prediction)
-        sensitivity = sensitivity_score(y, prediction)
-        recall = recall_score(y, prediction)
+        # Same values as the sklearn/imblearn metrics (0 when undefined)
+        sensitivity = tp / n_pos if n_pos else 0.0
+        specificity = (n_neg - fp) / n_neg if n_neg else 0.0
+        bacc = (sensitivity + specificity) / 2
+        f1 = 2 * tp / (2 * tp + fp + (n_pos - tp)) if tp else 0.0
+        recall = sensitivity
 
         # Append results
         result.append(
@@ -181,12 +190,12 @@ def compute_results(
     return result
 
 
-def results_to_df(result: List[List[Union[int, str, float]]]) -> pd.DataFrame:
+def results_to_df(result: list[list[Any]]) -> pd.DataFrame:
     """
     Convert the list of results to a DataFrame.
 
     Parameters:
-        result (List[List[Union[int, str, float]]]): List containing results.
+        result (list[list[Any]]): list containing results.
 
     Returns:
         pd.DataFrame: DataFrame containing results with labeled columns.
@@ -214,25 +223,25 @@ def results_to_df(result: List[List[Union[int, str, float]]]) -> pd.DataFrame:
 def save_best_model_params(
     i_fold: int,
     model_name: str,
-    model: Dict[str, Union[xgb.XGBClassifier, Dict[str, float]]],
-    result: List[List[Union[int, str, float]]],
+    model: TunedModel,
+    result: list[list[Any]],
     rs: bool = False,
     rpn: int = 0,
-) -> List[List[Union[int, str, float]]]:
+) -> list[list[Any]]:
     """
-    # noqa
+  
     Save the best model parameters to the result list.
 
     Parameters:
         i_fold (int): Index of the fold.
         model_name (str): Name or identifier of the model.
-        model (Dict[str, Union[object, Dict[str, Union[int, float]]]]): Dictionary containing the model and its best parameters.
+        model (TunedModel): Output of get_inner_loop_optuna (model and best parameters).
         rs (bool): Random State
         rpn (int): Random Permutation number
-        result (List[List[Union[int, str, float]]]): List to store the results.
+        result (list[list[Any]]): list to store the results.
 
     Returns:
-        List[List[Union[int, str, float]]]: Updated list with appended results.
+        list[list[Any]]: Updated list with appended results.
     """
     result.append(
         [
@@ -251,17 +260,17 @@ def save_best_model_params(
     return result
 
 
-def estimator_to_df(results: List[List[Any]]) -> pd.DataFrame:
+def estimator_to_df(results: list[list[Any]]) -> pd.DataFrame:
     """
     Convert results to a DataFrame.
 
     Args:
-        results (List[List[Any]]): List containing results.
+        results (list[list[Any]]): list containing results.
 
     Returns:
         pd.DataFrame: DataFrame containing results.
     """
-    columns: List[str] = [
+    columns: list[str] = [
         "Fold",
         "Model",
         "Random State",
@@ -273,3 +282,26 @@ def estimator_to_df(results: List[List[Any]]) -> pd.DataFrame:
         "max_depth",
     ]
     return pd.DataFrame(results, columns=columns)
+
+
+def save_fold_predictions(
+    save_dir: Path,
+    name: str,
+    predictions: Sequence[np.ndarray],
+    y_true: Sequence[np.ndarray],
+    patient_ids: Sequence[np.ndarray],
+) -> None:
+    """
+    Save out-of-fold predictions in the layout of the plotting notebooks:
+    ``<name>_predictions.csv``, ``<name>_y_true.csv`` and
+    ``<name>_patient_ID.csv``, one column per outer fold and one row per test
+    patient (shorter folds padded with NaN).
+    """
+    for values, suffix in [
+        (predictions, "predictions"),
+        (y_true, "y_true"),
+        (patient_ids, "patient_ID"),
+    ]:
+        pd.DataFrame([list(v) for v in values]).T.to_csv(
+            Path(save_dir) / f"{name}_{suffix}.csv"
+        )
