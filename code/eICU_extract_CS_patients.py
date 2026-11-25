@@ -1,7 +1,6 @@
 # %%
 import os
 
-import numpy as np
 import pandas as pd
 from lib.eICU_data_loading import (
     eICU_load_physical_exam,
@@ -16,9 +15,11 @@ from lib.eICU_data_loading import (
     load_eicu_st_segmentation,
 )
 from lib.eICU_processing import (
+    EICU_OUTCOMES,
     admission_name_matching,
     eICU_admission_heart_function,
     eICU_filter_CS_patients,
+    eicu_outcomes,
     full_model_name_matching,
 )
 
@@ -42,7 +43,7 @@ patients = load_eicu_patient_information(data_dir)
 merge_data = pd.merge(patients, diagnosis, how="outer")
 
 # Drop all the patients that don't have a endpoint
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 del diagnosis, patients
 # %%
 
@@ -61,14 +62,14 @@ assert merge_data["patientunitstayid"].nunique() == merge_data["uniquepid"].nuni
 # %%
 
 past_history = load_eicu_history(root_dir=data_dir)
-past_history.fillna(value=0, inplace=True)
+past_history = past_history.fillna(value=0)
 
 merge_data = pd.merge(merge_data, past_history, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # If some patients don't have any of the past history fill with 0
 for col in past_history.columns:
-    merge_data[col].fillna(0, inplace=True)
+    merge_data[col] = merge_data[col].fillna(0)
 del past_history
 
 # %%
@@ -76,11 +77,11 @@ physicalExam = eICU_load_physical_exam(data_dir)
 
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, physicalExam, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # If some patients don't have any of the past history fill with 0
 for col in physicalExam.columns:
-    merge_data[col].fillna(0, inplace=True)
+    merge_data[col] = merge_data[col].fillna(0)
 del physicalExam
 
 # %%
@@ -89,10 +90,10 @@ resuscitation = load_eicu_defibrillation(data_dir)
 
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, resuscitation, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # If some patients don't have any of the past history fill with 0
-merge_data["Resuscitation within 24hs"].fillna(0, inplace=True)
+merge_data["Resuscitation within 24hs"] = merge_data["Resuscitation within 24hs"].fillna(0)
 del resuscitation
 
 # Dyslipidemia
@@ -104,30 +105,30 @@ print(
 )
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, dyslipidemia, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # If some patients don't have any of the past history fill with 0
-merge_data["dyslipidemia"].fillna(0, inplace=True)
+merge_data["dyslipidemia"] = merge_data["dyslipidemia"].fillna(0)
 del dyslipidemia
 # %%
 # Mechanical ventilation
 mechanical_ventilation = load_eicu_mechanical_ventilation(data_dir)
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, mechanical_ventilation, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # If some patients don't have any of the past history fill with 0
-merge_data["mechanical_ventilation"].fillna(0, inplace=True)
+merge_data["mechanical_ventilation"] = merge_data["mechanical_ventilation"].fillna(0)
 del mechanical_ventilation
 # %%
 # ST elevation
 st_elevation = load_eicu_st_segmentation(data_dir)
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, st_elevation, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # If some patients don't have any of the past history fill with 0
-merge_data["ST_elevation"].fillna(0, inplace=True)
+merge_data["ST_elevation"] = merge_data["ST_elevation"].fillna(0)
 del st_elevation
 # %%
 
@@ -144,57 +145,47 @@ HR = eICU_admission_heart_function(
     time_before_cut_off=30,
 )
 merge_data = pd.merge(merge_data, HR, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # %%
-# Drop not longer needed columns
 merge_data["gender"] = merge_data["gender"].astype(int)
 merge_data["age"] = merge_data["age"].astype(int)
-merge_data["p_rf_smoker_yn"] = np.nan
 
-y_eicu = merge_data["hospitaldischargestatus"]
-
-X_admission = merge_data.drop(
-    [
-        "patientunitstayid",
-        "icd9code",
-        "unittype",
-        "uniquepid",
-        "hospitaldischargestatus",
-    ],
-    axis=1,
+# Outcome labels (all options, see EICU_OUTCOMES) and the early-death flag,
+# indexed by patientunitstayid. The label used for validation is chosen
+# later, in lib.data_load_utils.load_eICU(outcome=...).
+outcomes = eicu_outcomes(merge_data)
+print("eICU outcomes (events / patients with a known label):")
+for name, description in EICU_OUTCOMES.items():
+    n_events = int(outcomes[name].sum())
+    n_known = int(outcomes[name].notna().sum())
+    print(f"  {name}: {n_events} / {n_known}  ({description})")
+print(
+    "  died within 24 h of ICU admission (excluded for the Full model): "
+    f"{int(outcomes['death_within_24h'].sum())}"
 )
 
-X_admission = admission_name_matching(X_admission)
+# Features are indexed by patientunitstayid, like the outcomes
+X_admission = admission_name_matching(merge_data.set_index("patientunitstayid"))
 # %%
-X_admission.to_csv(save_dir + "X_admission_CICU.csv")
-y_eicu.to_csv(save_dir + "y_CICU.csv")
+X_admission.to_csv(save_dir + "X_Admission_CICU.csv")
+outcomes.to_csv(save_dir + "outcomes_CICU.csv")
 
 # %% 24 features
 
 # Lab
 lab = load_eicu_24hs_features(data_dir)
 merge_data = pd.merge(merge_data, lab, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 
 # Mechanical support
 mechanical_support = load_eicu_mechanical_support(data_dir)
 merge_data = pd.merge(merge_data, mechanical_support, how="outer")
-merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
+merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 # %%
-# Get only relevant features
-Full_model_data = merge_data.drop(
-    [
-        "patientunitstayid",
-        "icd9code",
-        "unittype",
-        "uniquepid",
-        "hospitaldischargestatus",
-    ],
-    axis=1,
-)
-
-Full_model_data = full_model_name_matching(Full_model_data)
+# Full-model features for ALL patients; the patients who died within 24 h are
+# excluded when loading (load_eICU, exclude_early_deaths), as in CULPRIT-SHOCK
+Full_model_data = full_model_name_matching(merge_data.set_index("patientunitstayid"))
 Full_model_data.to_csv(save_dir + "X_Full_CICU.csv")
 
 # %%
