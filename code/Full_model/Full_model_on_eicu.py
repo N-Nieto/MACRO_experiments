@@ -1,26 +1,34 @@
 # %%
-import joblib
-import numpy as np
-import pandas as pd
-from sklearn.model_selection import StratifiedKFold
-import optuna
 import os
 import sys
+from pathlib import Path
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))
+import joblib
+import numpy as np
+import optuna
+import pandas as pd
+from sklearn.model_selection import StratifiedKFold
+
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.append(project_root + "/code/")
 
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features, load_eICU  # noqa
-from lib.experiment_definitions import get_features  # noqa
-from lib.data_processing import remove_low_variance_features  # noqa
-from lib.ml_utils import compute_results, get_inner_loop_optuna  # noqa
-from lib.ml_utils import results_to_df  # noqa
+from lib.data_load_utils import get_data_from_features, load_CULPRIT_data, load_eICU
+from lib.data_processing import remove_low_variance_features
+from lib.experiment_definitions import get_features
+from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
 data_dir = "/data/CULPRIT/"
 save_dir = project_root + "/output/"
-# Minimun feature variance
+# eICU data root (folder containing eicu-collaborative-research-database-2.0),
+# same location as in eICU_extract_CS_patients.py
+eicu_data_dir = Path(project_root).parents[1] / "data"
+# eICU label, one of lib.eICU_processing.EICU_OUTCOMES:
+# "in_hospital_death" (submitted manuscript), "in_hospital_death_30d_icu",
+# "in_hospital_death_30d_hospital", "icu_death"
+eicu_outcome = "in_hospital_death"
+# Minimum feature variance
 variance_ths = 0.10
 # Set random state
 random_state = 23
@@ -79,7 +87,8 @@ n_participants, n_features = X.shape
 print("Full features: " + str(n_features))
 
 
-X_eicu, Y_test_eicu = load_eICU(features="Full", exclude_smokers=True, X_CULPRIT=X)
+# Patients who died within 24 h are excluded by default for the Full model
+X_eicu, Y_test_eicu = load_eICU(eicu_data_dir, "Full", X, outcome=eicu_outcome)
 
 # %%
 
@@ -114,22 +123,22 @@ results_full = results_to_df(results_full)
 # %%
 # % Saving results
 print("Saving Results")
-results_full.to_csv(save_dir + "Full_performance_CULPRIT_eICU.csv")  # noqa
+results_full.to_csv(save_dir + "Full_performance_CULPRIT_eICU.csv")
 # # Save the models in the web_service direction.
 joblib.dump(full_model["model"], save_dir + "Full_model_no_smokers.pkl")
 
 predictions_full = pd.DataFrame(pred_train)
 predictions_full = predictions_full.T
-predictions_full.to_csv(save_dir + "predictions_full_CULPRIT_no_smokers.csv")  # noqa
+predictions_full.to_csv(save_dir + "predictions_full_CULPRIT_no_smokers.csv")
 
 y_true_loop = pd.DataFrame(Y)
 y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir + "y_true_CULPRIT_no_smokers.csv")  # noqa
+y_true_loop.to_csv(save_dir + "y_true_CULPRIT_no_smokers.csv")
 
 predictions_full = pd.DataFrame(pred_test)
 predictions_full = predictions_full.T
-predictions_full.to_csv(save_dir + "predictions_full_eICU_no_smokers.csv")  # noqa
+predictions_full.to_csv(save_dir + "predictions_full_eICU_no_smokers.csv")
 
 y_true_loop = pd.DataFrame(Y_test_eicu)
 y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir + "y_true_eICU_no_smokers.csv")  # noqa
+y_true_loop.to_csv(save_dir + "y_true_eICU_no_smokers.csv")
