@@ -1,6 +1,4 @@
 # %%
-import os
-
 import pandas as pd
 from lib.eICU_data_loading import (
     eICU_load_physical_exam,
@@ -14,25 +12,26 @@ from lib.eICU_data_loading import (
     load_eicu_patient_information,
     load_eicu_st_segmentation,
 )
+from lib.paths import EICU_DIR, EICU_PREPROCESSED_DIR
 from lib.eICU_processing import (
     EICU_OUTCOMES,
     admission_name_matching,
     eICU_admission_heart_function,
     eICU_filter_CS_patients,
+    eicu_bnp_to_ntprobnp,
     eicu_outcomes,
     full_model_name_matching,
 )
 
-# Data must be stored in a folder called "data" at the same hierarchy
-# as the cloned repository
-project_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-)
-data_dir = project_root + "/data/eicu-collaborative-research-database-2.0/"
-# please make sure to create this folder
-save_dir = (
-    project_root + "/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"
-)
+# Raw eICU tables and output folder (see lib/paths.py)
+data_dir = str(EICU_DIR) + "/"
+EICU_PREPROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+save_dir = str(EICU_PREPROCESSED_DIR) + "/"
+# eICU reports BNP, CULPRIT-SHOCK NT-proBNP. NT-proBNP proxy, one of
+# lib.eICU_processing.EICU_BNP_OPTIONS: "ishihara2022" (published conversion
+# with BMI and eGFR, default), "ratio" (x6.25), "as_is" (submitted manuscript),
+# "missing"
+bnp_handling = "ishihara2022"
 # %%
 # Load all the diagnosis
 diagnosis = load_eicu_diagnosis(data_dir)
@@ -182,6 +181,12 @@ merge_data = merge_data.dropna(subset="hospitaldischargestatus")
 mechanical_support = load_eicu_mechanical_support(data_dir)
 merge_data = pd.merge(merge_data, mechanical_support, how="outer")
 merge_data = merge_data.dropna(subset="hospitaldischargestatus")
+# No IABP record in the first 24 h means no mechanical support (0), as for the
+# other binary features; it was left missing before
+merge_data["hpe_proc_mechs_yn"] = merge_data["hpe_proc_mechs_yn"].fillna(0)
+
+# NT-proBNP proxy from BNP (uses age, sex, height, weight and creatinine)
+merge_data = eicu_bnp_to_ntprobnp(merge_data, method=bnp_handling)
 # %%
 # Full-model features for ALL patients; the patients who died within 24 h are
 # excluded when loading (load_eICU, exclude_early_deaths), as in CULPRIT-SHOCK
