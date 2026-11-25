@@ -14,12 +14,14 @@ from lib.unit_harmonization import (
 )
 
 
-def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
+def load_CULPRIT_data(data_dir: Path, harmonize: bool = True) -> pd.DataFrame:
     """
     Load CULPRIT study data, keep only the first day information, and harmonize units.
 
     Parameters:
         data_dir (str): The directory path where the data is located.
+        harmonize (bool): Apply the unit harmonization (default). False returns
+            the raw lab values, e.g. to inspect units (data_checks/).
 
     Returns:
         pd.DataFrame: Processed and harmonized CULPRIT study data.
@@ -82,6 +84,9 @@ def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
     # Calculate CLIP score from features
     data_final = calcule_CLIP_score_from_features(data_final)
 
+    if not harmonize:
+        return data_final
+
     # Harmonize units
     data_final = ck_unit_harmonization(data_final)
     data_final = lactate_unit_harmonization(data_final)
@@ -123,7 +128,7 @@ def load_table(data_dir: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The loaded DataFrame.
     """
-    table = pd.read_excel(data_dir + "Shorten_table.xlsx", sheet_name=None, index_col=0)
+    table = pd.read_excel(Path(data_dir) / "Shorten_table.xlsx", sheet_name=None, index_col=0)
     return table["Sheet1"]
 
 
@@ -402,6 +407,7 @@ def load_eICU(
     X_CULPRIT: pd.DataFrame,
     outcome: str = "in_hospital_death",
     exclude_early_deaths: bool | None = None,
+    match_pbnp_to_culprit: bool = False,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """
     Load the preprocessed eICU cohort (from eICU_extract_CS_patients.py) and
@@ -425,6 +431,10 @@ def load_eICU(
         Drop patients who died within 24 h of ICU admission. Default (None):
         True for "Full" (matching the CULPRIT-SHOCK Full-model cohort),
         False for "Admission".
+    match_pbnp_to_culprit : bool
+        Quantile-map the eICU NT-proBNP proxy onto the CULPRIT-SHOCK NT-proBNP
+        distribution (sensitivity analysis; removes any true difference in
+        level between the cohorts). Default False.
 
     Returns
     -------
@@ -459,6 +469,22 @@ def load_eICU(
 
     # Align eICU feature columns with the CULPRIT-SHOCK training columns
     X_eicu = X_eicu.loc[keep].reindex(columns=X_CULPRIT.columns)
+
+    if match_pbnp_to_culprit and "pbnp" in X_eicu and "pbnp" in X_CULPRIT:
+        X_eicu["pbnp"] = quantile_match(X_eicu["pbnp"], X_CULPRIT["pbnp"])
     Y_eicu = outcomes.loc[keep, outcome].astype(int).to_numpy()
 
     return X_eicu, Y_eicu
+
+
+def quantile_match(values: pd.Series, reference: pd.Series) -> pd.Series:
+    """
+    Map each value to the reference quantile at the value's (mid-)rank
+    percentile, so that the result has the reference distribution. NaN stay NaN.
+    """
+    present = values.dropna()
+    if present.empty or reference.dropna().empty:
+        return values
+    percentiles = (present.rank(method="average") - 0.5) / len(present)
+    matched = np.quantile(reference.dropna().to_numpy(), percentiles.to_numpy())
+    return values.astype(float).where(values.isna(), pd.Series(matched, index=present.index))

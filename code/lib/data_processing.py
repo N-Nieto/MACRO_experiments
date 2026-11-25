@@ -71,7 +71,7 @@ def remove_low_variance_features(
     selector.fit(data)
 
     # Get the indices of the selected features
-    selected_features_indices = selector.get_support(indices=True)
+    selected_features_indices = np.asarray(selector.get_support(indices=True))
 
     # Filter the DataFrame to keep only the selected features
     data = data.iloc[:, selected_features_indices]

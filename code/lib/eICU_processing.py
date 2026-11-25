@@ -242,24 +242,97 @@ def different_lactate_timing(row):
     return row["labname"]
 
 
-# eICU to CULPRIT unit Harmonize functions
-def eicu_CPK_harmonization(cpk):
-    return cpk / 0.14999  # Conversion factor: 1 U/L =  mmol/L
+# eICU -> CULPRIT-SHOCK units (targets in lib.unit_harmonization.TARGET_UNITS).
+# eICU units checked in output/data_checks/lab_units_report.md.
+EICU_UNIT_FACTORS = {
+    "CPK": 1.0,  # U/L -> U/L (was divided by 0.14999)
+    "troponin - T": 1000.0,  # ng/mL -> ng/L (pg/mL)
+    "creatinine": 88.42,  # mg/dL -> umol/L
+    "ALT (SGPT)": 1 / 60,  # U/L -> ukat/L
+    "CRP": 10.0,  # mg/dL -> mg/L (was not converted)
+    # lactate (mmol/L), WBC x 1000 (K/uL), Hct (%), glucose (mg/dL), INR: same units
+}
+
+def harmonize_eicu_labs(lab: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert the wide eICU lab table (one column per lab name) to the
+    CULPRIT-SHOCK units. BNP is handled separately (eicu_bnp_to_ntprobnp).
+    """
+    lab = lab.copy()
+    for name, factor in EICU_UNIT_FACTORS.items():
+        if name in lab.columns:
+            lab[name] = lab[name] * factor
+    return lab
 
 
-def eicu_Troponin_harmonization(troponin_t):
-    return troponin_t * 1000  # Conversion factor: 1 ng/L = 1000 pg/L
+# eICU reports BNP, CULPRIT-SHOCK NT-proBNP (different peptides and scales).
+# Options to use eICU BNP as a proxy of NT-proBNP:
+#   "ishihara2022": log10 NT-proBNP = 1.21 + 1.03 log10 BNP - 0.009 BMI
+#                   - 0.007 eGFR (Ishihara et al., Circ J 2022;86:2010-2018;
+#                   eGFR with the Japanese equation used by the authors).
+#                   The log base is not stated in the paper; log10 is the one
+#                   that reproduces their medians (BNP 55.5 -> ~200 pg/mL).
+#   "ratio":        NT-proBNP = 6.25 x BNP (median ratio in PARADIGM-HF,
+#                   Rorth et al., Circ Heart Fail 2020;13:e006541)
+#   "as_is":        BNP used unchanged as NT-proBNP (submitted manuscript)
+#   "missing":      NT-proBNP not available in eICU
+EICU_BNP_OPTIONS = ("ishihara2022", "ratio", "as_is", "missing")
+BNP_NTPROBNP_RATIO = 6.25
 
 
-def eicu_Creatinine_harmonization(creatinine):
-    # Conversion factor: 1 microgram/dl = 0.00885 micromol/L
-    creatinine = creatinine / 113.12
-    creatinine = creatinine * 10000
-    return creatinine
+def japanese_egfr(creatinine_mg_dl, age, female):
+    """eGFR (mL/min/1.73 m2), Japanese equation (Matsuo et al., 2009)."""
+    egfr = 194.0 * np.power(creatinine_mg_dl, -1.094) * np.power(age, -0.287)
+    return np.where(female, egfr * 0.739, egfr)
 
 
-def eicul_ALAT_harmonization(alat):
-    return alat / 60  # Conversion factor: 1 U/L = 0.01667 microkat/L
+def ishihara_ntprobnp(bnp, bmi, egfr):
+    """NT-proBNP (pg/mL) from BNP (pg/mL), BMI (kg/m2) and eGFR (Ishihara 2022)."""
+    return np.power(10.0, 1.21 + 1.03 * np.log10(bnp) - 0.009 * bmi - 0.007 * egfr)
+
+
+def eicu_bnp_to_ntprobnp(data: pd.DataFrame, method: str = "ishihara2022") -> pd.DataFrame:
+    """
+    Replace the eICU "BNP" column by an NT-proBNP proxy (see EICU_BNP_OPTIONS).
+
+    Expects the merged eICU data with "BNP" (pg/mL), "creatinine" (umol/L,
+    after harmonize_eicu_labs), "age", "gender" (1 = male), "admissionheight"
+    (cm) and "admissionweight" (kg). For "ishihara2022", a missing BMI or eGFR
+    is replaced by the cohort median (count printed).
+    """
+    if method not in EICU_BNP_OPTIONS:
+        raise ValueError(f"method must be one of {EICU_BNP_OPTIONS}, got {method!r}")
+    data = data.copy()
+    if "BNP" not in data.columns or method == "as_is":
+        return data
+    if method == "missing":
+        return data.drop(columns="BNP")
+
+    bnp = data["BNP"].where(data["BNP"] > 0)
+    if method == "ratio":
+        data["BNP"] = bnp * BNP_NTPROBNP_RATIO
+        return data
+
+    height_m = data["admissionheight"] / 100
+    bmi = data["admissionweight"] / height_m**2
+    bmi = bmi.where(bmi.between(12, 80))
+    age = pd.to_numeric(data["age"], errors="coerce")
+    creatinine_mg_dl = data["creatinine"] / 88.42
+    egfr = pd.Series(
+        japanese_egfr(creatinine_mg_dl, age, data["gender"] == 0), index=data.index
+    )
+    has_bnp = bnp.notna()
+    for name, covariate in [("BMI", bmi), ("eGFR", egfr)]:
+        n_missing = int((has_bnp & covariate.isna()).sum())
+        if n_missing:
+            print(
+                f"[BNP -> NT-proBNP] {name} missing for {n_missing} patients "
+                "with BNP: cohort median used"
+            )
+    bmi = bmi.fillna(bmi.median())
+    egfr = egfr.fillna(egfr.median())
+    data["BNP"] = ishihara_ntprobnp(bnp, bmi, egfr)
+    return data
 
 
 # eICU column name -> CULPRIT-SHOCK feature name (as used in experiment_definitions)

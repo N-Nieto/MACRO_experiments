@@ -4,11 +4,8 @@ from collections.abc import Iterable
 import pandas as pd
 from lib.eICU_processing import (
     different_lactate_timing,
-    eicu_CPK_harmonization,
-    eicu_Creatinine_harmonization,
-    eicu_Troponin_harmonization,
-    eicul_ALAT_harmonization,
     group_features,
+    harmonize_eicu_labs,
     process_individual_features,
 )
 
@@ -442,6 +439,8 @@ def load_eicu_st_segmentation(root_dir: str) -> pd.DataFrame:
 def load_eicu_24hs_features(root_dir: str) -> pd.DataFrame:
     """
     Load and preprocess lab data for 24-hour features from the eICU dataset.
+    Units are converted to CULPRIT-SHOCK units; BNP stays BNP (pg/mL), see
+    lib.eICU_processing.eicu_bnp_to_ntprobnp.
 
     Args:
         root_dir (str): The root directory of the eICU dataset.
@@ -498,11 +497,8 @@ def load_eicu_24hs_features(root_dir: str) -> pd.DataFrame:
         index="patientunitstayid", columns="labname", values="labresult"
     ).reset_index()
 
-    # Apply unit harmonization functions to specific columns
-    lab["CPK"] = lab["CPK"].apply(eicu_CPK_harmonization)
-    lab["troponin - T"] = lab["troponin - T"].apply(eicu_Troponin_harmonization)
-    lab["creatinine"] = lab["creatinine"].apply(eicu_Creatinine_harmonization)
-    lab["ALT (SGPT)"] = lab["ALT (SGPT)"].apply(eicul_ALAT_harmonization)
+    # Convert to the CULPRIT-SHOCK units
+    lab = harmonize_eicu_labs(lab)
 
     return lab
 
