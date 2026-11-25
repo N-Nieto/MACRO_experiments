@@ -1,0 +1,35 @@
+[project]
+name = "macro-experiments"
+version = "0.2.0"
+description = "Code to reproduce 'Machine learning models for early prognosis prediction in cardiogenic shock' (MACRO)"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.5",
+    "pandas>=3.1.1",
+    "scipy>=1.18.1",
+    "scikit-learn>=1.9.1",
+    "xgboost>=3.4.1",
+    "optuna>=5.1.0",
+    "optuna-integration>=5.1.0",
+    "imbalanced-learn>=0.14.2",
+    "shap>=0.54.1",
+    "joblib>=1.6.0",
+    "openpyxl>=3.1.5",
+    "matplotlib>=3.11.2",
+    "seaborn>=0.13.2",
+    "statannotations>=0.7.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ipykernel>=7.4.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
