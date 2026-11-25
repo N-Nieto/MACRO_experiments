@@ -2,7 +2,6 @@
 # %%
 import os
 import sys
-from pathlib import Path
 
 import numpy as np
 import optuna
@@ -15,16 +14,17 @@ from lib.data_load_utils import get_data_from_features, load_CULPRIT_data, load_
 from lib.data_processing import remove_low_variance_features
 from lib.experiment_definitions import get_features
 from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df
+from lib.paths import CULPRIT_DIR, DATA_DIR
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
 
-data_dir = "/data/CULPRIT/"
+data_dir = CULPRIT_DIR  # see lib/paths.py
 save_dir = project_root+"/output/"     
 # eICU data root (folder containing eicu-collaborative-research-database-2.0),
 # same location as in eICU_extract_CS_patients.py
-eicu_data_dir = Path(project_root).parents[1] / "data"
+eicu_data_dir = DATA_DIR
 # eICU label, one of lib.eICU_processing.EICU_OUTCOMES:
 # "in_hospital_death" (submitted manuscript), "in_hospital_death_30d_icu",
 # "in_hospital_death_30d_hospital", "icu_death"

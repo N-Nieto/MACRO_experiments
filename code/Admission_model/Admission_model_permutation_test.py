@@ -13,9 +13,10 @@ from lib.data_load_utils import load_CULPRIT_data, get_data_from_features       
 from lib.experiment_definitions import get_features                                         # noqa
 from lib.data_processing import remove_low_variance_features                                # noqa
 from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df              # noqa
+from lib.paths import CULPRIT_DIR  # noqa
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
-data_dir = "/data/CULPRIT/"
+data_dir = CULPRIT_DIR  # see lib/paths.py
 save_dir = project_root+"/output/"
 
 # Minimun feature variance
