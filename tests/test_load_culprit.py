@@ -1,4 +1,5 @@
 """load_CULPRIT_data on a synthetic CULPRIT-SHOCK export."""
+import pandas as pd
 import pytest
 from lib.data_load_utils import load_CULPRIT_data
 from lib.experiment_definitions import get_features
@@ -40,3 +41,25 @@ def test_harmonized_values_share_one_unit(culprit_dir, feature, code_col):
     medians = medians[data.groupby(code_col)[feature].count() >= 2]
     assert len(medians) >= 2
     assert medians.max() / medians.min() < 2
+
+
+def test_therapy_flags_use_the_patients_own_admission_date(culprit_dir):
+    # Ground truth computed independently, per patient
+    sheets = pd.read_excel(culprit_dir / "CULPRIT-data_20210407.xlsx", sheet_name=None)
+    data = load_CULPRIT_data(culprit_dir).set_index("patient_ID")
+
+    def patient_id(df):
+        return df["cor_ctr_center_id"].astype(str) + "-" + df["cor_pt_caseno_id"].astype(str)
+
+    admission = sheets["patient_data"].set_index(patient_id(sheets["patient_data"]))["had_base_admis_date"]
+    for sheet, column, name in [
+        ("cathecholamine", "icu_catec_start_date", "cathecholamine_therapy"),
+        ("endpoint", "icu_rrt_start_date", "renal_replacement_therapy"),
+    ]:
+        episodes = sheets[sheet].assign(patient_ID=patient_id(sheets[sheet]))
+        days = (pd.to_datetime(episodes[column]) - pd.to_datetime(admission.loc[episodes["patient_ID"]]).to_numpy()).dt.days
+        expected = days.isin([0, 1]).groupby(episodes["patient_ID"]).any().astype(int)
+        assert (data.loc[expected.index, name] == expected).all(), name
+        assert 0 < expected.mean() < 1
+    # Patients missing from the endpoint sheet stay missing (NaN), as before
+    assert data["renal_replacement_therapy"].isna().sum() > 0

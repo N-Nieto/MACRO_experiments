@@ -83,14 +83,31 @@ def write_synthetic_culprit(folder: Path, n: int = 80, seed: int = 0) -> Path:
 
     clip = pd.DataFrame({k.upper(): v for k, v in ids.items()})
     clip["TIME"] = "V1"
-    for col, (a, b) in {"CYSC_S_1": (2, 0.6), "LAC": (2, 2), "IL_6": (2, 100), "PBNP": (2, 2000),
+    for col, (a, b) in {"CYSC_S_1": (2, 0.6), "LAC": (2, 2), "IL_6": (2, 100), "PBNP": (2, 2000), "CKDEPI": (4, 15),
                         "CK": (2, 400), "CRE": (2, 60), "GLUC": (2, 90), "TNT": (2, 2000), "ALAT": (2, 1)}.items():
         clip[col] = rng.gamma(a, b, n).round(2)
 
+    # Therapy sheets as in the real export: one row per episode, several rows
+    # per patient, not in the patient order (row-wise alignment with
+    # patient_data is wrong). Catecholamine start: day 0-1 for ~85% of the
+    # patients, otherwise later; second episodes always start later.
+    first_day = rng.random(n) < 0.85
+    start_day = np.where(first_day, rng.integers(0, 2, n), rng.integers(2, 6, n))
     cate = pd.DataFrame(ids)
-    cate["icu_catec_start_date"] = admission
+    cate["icu_catec_start_date"] = admission + pd.to_timedelta(start_day, unit="D")
+    second = pd.DataFrame(ids).iloc[: n // 2]
+    second["icu_catec_start_date"] = (admission + pd.to_timedelta(rng.integers(3, 9, n), unit="D"))[: n // 2]
+    cate = pd.concat([cate, second]).sample(frac=1, random_state=seed).reset_index(drop=True)
+    # RRT: only ~60% of the patients appear in the endpoint sheet
+    in_sheet = rng.random(n) < 0.6
+    rrt_day = np.where(rng.random(n) < 0.25, rng.integers(0, 2, n), rng.integers(2, 10, n))
     endpoint = pd.DataFrame(ids)
-    endpoint["icu_rrt_start_date"] = dates(0.15)
+    endpoint["icu_rrt_start_date"] = pd.Series(admission + pd.to_timedelta(rrt_day, unit="D")).where(
+        rng.random(n) < 0.5
+    )
+    endpoint = endpoint[in_sheet].sample(frac=1, random_state=seed + 1).reset_index(drop=True)
+    # Clinical variables used by the CardShock score
+    patient["hpr_echo_lvef_pct"] = rng.normal(40, 12, n).round(0)
 
     path = Path(folder) / FILE_NAME
     with pd.ExcelWriter(path) as writer:

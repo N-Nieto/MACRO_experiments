@@ -203,97 +203,102 @@ def create_admission_lactate(patient_info: pd.DataFrame) -> pd.DataFrame:
     return patient_info
 
 
-def get_admission_date(data: pd.DataFrame) -> pd.DataFrame:
+def get_admission_date(data: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
     Extract admission date from patient information.
 
     Parameters:
-        data: The input data.
+        data: The Excel sheets of the CULPRIT-SHOCK export.
 
     Returns:
-        pd.DataFrame: DataFrame with admission date.
+        pd.DataFrame: patient_ID and admission date (had_base_admis_date).
     """
-    patient_info = data["patient_data"]
-    patient_info = create_unique_patient_ID(patient_info)
+    patient_info = create_unique_patient_ID(data["patient_data"])
 
     admission_date = patient_info.loc[:, ["had_base_admis_date", "patient_ID"]]
     return admission_date
 
 
-def add_catecholamine_therapy(
-    data: pd.DataFrame, patient_info: pd.DataFrame
+def therapy_started_first_day(
+    data: dict[str, pd.DataFrame], sheet: str, start_column: str, name: str
 ) -> pd.DataFrame:
     """
-    Add catecholamine therapy information to patient data.
+    Flag patients with a therapy that started on the admission day or the day
+    after (day 0 or 1), from a sheet with one row per therapy episode.
+
+    The start date of every episode is compared with the admission date of the
+    same patient (matched on patient_ID). Previously the two columns were
+    subtracted row by row although they come from different sheets, so the
+    episodes were compared with the admission date of other patients.
+
+    Returns:
+        pd.DataFrame: one row per patient in the sheet, with patient_ID and
+        ``name`` (1 if any episode started on day 0 or 1, else 0).
+    """
+    episodes = create_unique_patient_ID(data[sheet]).loc[:, ["patient_ID", start_column]]
+    episodes = episodes.merge(get_admission_date(data), on="patient_ID", how="left")
+    days = (
+        pd.to_datetime(episodes[start_column])
+        - pd.to_datetime(episodes["had_base_admis_date"])
+    ).dt.days
+    episodes[name] = days.isin([0, 1])
+    flags = episodes.groupby("patient_ID")[name].any().astype(int).reset_index()
+    return flags
+
+
+def add_catecholamine_therapy(
+    data: dict[str, pd.DataFrame], patient_info: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Add catecholamine therapy (started on day 0 or 1) to patient data.
+
+    As before, only patients present in the catecholamine sheet are kept
+    (inner merge), so the cohort is unchanged.
 
     Parameters:
-        data: The input data.
+        data: The Excel sheets of the CULPRIT-SHOCK export.
         patient_info (pd.DataFrame): DataFrame containing patient information.
 
     Returns:
         pd.DataFrame: Updated patient_info DataFrame with 'cathecholamine_therapy' column.
     """
-    cate = data["cathecholamine"]
-    cate = create_unique_patient_ID(cate)
-
-    cate = cate.loc[:, ["icu_catec_start_date", "patient_ID"]]
-    admission_date = get_admission_date(data)
-
-    cate["date_cate_start"] = pd.to_datetime(cate["icu_catec_start_date"])
-    admission_date["date_admission"] = pd.to_datetime(
-        admission_date["had_base_admis_date"]
+    cate_df = therapy_started_first_day(
+        data, "cathecholamine", "icu_catec_start_date", "cathecholamine_therapy"
     )
-
-    cate["cathecholamine_therapy"] = (
-        cate["date_cate_start"] - admission_date["date_admission"]
-    ).dt.days.isin([0, 1])
-    cate_df = cate.groupby("patient_ID")["cathecholamine_therapy"].any().reset_index()
-    cate_df["cathecholamine_therapy"] = cate_df["cathecholamine_therapy"].astype(int)
-
+    n_before = len(patient_info)
     patient_info = pd.merge(patient_info, cate_df, on="patient_ID")
+    if len(patient_info) < n_before:
+        print(
+            f"{n_before - len(patient_info)} patients without a catecholamine record "
+            "were excluded (cohort definition unchanged)"
+        )
 
     return patient_info
 
 
 def add_renal_replacement_therapy(
-    data: pd.DataFrame, patient_X: pd.DataFrame
+    data: dict[str, pd.DataFrame], patient_X: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Add renal replacement therapy information to patient data.
+    Add renal replacement therapy (started on day 0 or 1) to patient data.
+    Patients not present in the endpoint sheet get NaN (missing), as before.
 
     Parameters:
-        data: The input data.
+        data: The Excel sheets of the CULPRIT-SHOCK export.
         patient_X (pd.DataFrame): DataFrame containing patient information.
 
     Returns:
         pd.DataFrame: Updated patient_X DataFrame with 'renal_replacement_therapy' column.
     """
-    # Search where the renal_replacement_therapy is
-    rrt = data["endpoint"]
-    # Create a unique patient ID
-    rrt = create_unique_patient_ID(rrt)
-    # Keep only the starting date and the patient ID
-    rrt = rrt.loc[:, ["icu_rrt_start_date", "patient_ID"]]
-    # Get the admission date for the patients
-    admission_date = get_admission_date(data)
-    # Change
-    rrt["date_rrt_start"] = pd.to_datetime(rrt["icu_rrt_start_date"])
-    admission_date["date_admission"] = pd.to_datetime(
-        admission_date["had_base_admis_date"]
+    rrt_df = therapy_started_first_day(
+        data, "endpoint", "icu_rrt_start_date", "renal_replacement_therapy"
     )
-
-    rrt["renal_replacement_therapy"] = (
-        rrt["date_rrt_start"] - admission_date["date_admission"]
-    ).dt.days.isin([0, 1])
-    rrt_df = rrt.groupby("patient_ID")["renal_replacement_therapy"].any().reset_index()
-    rrt_df["renal_replacement_therapy"] = rrt_df["renal_replacement_therapy"].astype(int)
-
     patient_X = patient_X.merge(rrt_df, on="patient_ID", how="left")
 
     return patient_X
 
 
-def add_sepsis(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
+def add_sepsis(data: dict[str, pd.DataFrame], patient_info: pd.DataFrame) -> pd.DataFrame:
     """
     Add sepsis information to patient data.
 
@@ -323,7 +328,7 @@ def add_sepsis(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_ventricular_fibrillation(
-    data: pd.DataFrame, patient_info: pd.DataFrame
+    data: dict[str, pd.DataFrame], patient_info: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Add ventricular fibrillation information to patient data.
@@ -353,7 +358,7 @@ def add_ventricular_fibrillation(
     return patient_info
 
 
-def add_stroke(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
+def add_stroke(data: dict[str, pd.DataFrame], patient_info: pd.DataFrame) -> pd.DataFrame:
     """
     Add stroke information to patient data.
 
