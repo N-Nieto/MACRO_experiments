@@ -13,12 +13,13 @@ sys.path.append(project_root+"/code/")
 
 from lib.data_load_utils import create_admission_lactate, create_unique_patient_ID
 from lib.ml_utils import compute_results, results_to_df
+from lib.paths import CULPRIT_DIR
 from lib.unit_harmonization import lactate_unit_harmonization
 
 # %%
 save_dir = project_root+"/output/"
 # Load main data
-data = pd.read_excel(project_root + "/data/CULPRIT-data_20210407.xlsx",    
+data = pd.read_excel(CULPRIT_DIR / "CULPRIT-data_20210407.xlsx",  # see lib/paths.py
                      sheet_name=None)
 
 # Extract patient data

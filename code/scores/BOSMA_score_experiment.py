@@ -8,9 +8,10 @@ from lib.eICU_data_loading import (
     load_eicu_patient_information,
 )
 from lib.eICU_processing import eICU_filter_CS_patients
+from lib.paths import EICU_DIR, EICU_PREPROCESSED_DIR
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
 
-root_dir = "/data/eicu-collaborative-research-database-2.0/"            
+root_dir = str(EICU_DIR) + "/"  # see lib/paths.py
 # %%
 # Load all the diagnosis
 diagnosis = load_eicu_diagnosis(root_dir)
@@ -161,7 +162,8 @@ def map_score_to_risk(score):
 patient_BOSMAN['BOSMAN_risk'] = patient_BOSMAN['BOSMAN_score'].apply(map_score_to_risk)       
 # %%
 # Save the dataframe
-patient_BOSMAN.to_csv(root_dir + "BOSMAN_info.csv")
+EICU_PREPROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+patient_BOSMAN.to_csv(EICU_PREPROCESSED_DIR / "BOSMAN_info.csv")
 
 # %%
 

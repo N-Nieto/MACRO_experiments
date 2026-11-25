@@ -13,8 +13,9 @@ sys.path.append(project_root+"/code/")
 from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
 from lib.experiment_definitions import get_features                                         # noqa
 from lib.ml_utils import compute_results                                                    # noqa
+from lib.paths import CULPRIT_DIR  # noqa
 # %%
-data_dir = "/data/CULPRIT/"
+data_dir = CULPRIT_DIR  # see lib/paths.py
 save_dir = project_root+"/output/"
 # Minimun feature variance
 variance_ths = 0.10

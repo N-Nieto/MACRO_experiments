@@ -1,13 +1,21 @@
 # %%
-import pandas as pd
-from lib.ml_utils import compute_results, results_to_df
+import sys
+from pathlib import Path
 
-eicu_root = "/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"          # noqa
+import pandas as pd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from lib.ml_utils import compute_results, results_to_df  # noqa: E402
+from lib.paths import EICU_PREPROCESSED_DIR  # noqa: E402
+
+eicu_root = str(EICU_PREPROCESSED_DIR) + "/"  # see lib/paths.py
 
 patient_BOSMAN = pd.read_csv(eicu_root + "BOSMAN_info.csv", index_col=0)
 patient_BOSMAN = patient_BOSMAN.dropna()
 
-patients_CICU = pd.read_csv(eicu_root + "patients_CICU.csv", index_col=0)
+# Cardiac-ICU cohort written by eICU_extract_CS_patients.py
+# (patients_CICU.csv was not produced by any script)
+patients_CICU = pd.read_csv(eicu_root + "outcomes_CICU.csv")
 cicu_patients = patients_CICU["patientunitstayid"].to_list()
 
 patient_BOSMAN_CICU = patient_BOSMAN[patient_BOSMAN["patientunitstayid"].isin(cicu_patients)]                           # noqa
