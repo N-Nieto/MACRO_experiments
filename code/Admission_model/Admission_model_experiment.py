@@ -32,10 +32,15 @@ from lib.utils import ensure_dir
 data_dir = project_dir.parents[1] / "Data MODS" / "data" / "CULPRIT/"
 save_dir = project_dir / "output" / "Admission_model/"
 ensure_dir(save_dir)
+# Fitted model of every outer fold (XGBoost JSON), for post-hoc analyses
+models_dir = save_dir / "fold_models"
+ensure_dir(models_dir)
 # Minimun feature variance
 variance_ths = 0.10
 # Set random state
 random_state = 23
+# Random generator for the random feature-removal scenario
+rng = np.random.default_rng(random_state)
 
 # Cross validation parameters
 out_n_splits = 10
@@ -74,6 +79,7 @@ patient_info = load_CULPRIT_data(data_dir)
 endpoint_to_use = "fu_ce_death_le30d_yn"  # or "fu_ce_death_le365d_yn"
 y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
 Y = y.iloc[:, 1].to_numpy()
+patient_ids = y["patient_ID"].to_numpy()
 
 # Spot those patients that expired in the first 24hs
 severity = patient_info["fu_ce_Death_d"] == 0
@@ -121,6 +127,7 @@ results_estimators = []
 
 predictions = []
 y_true_loop = []
+patient_id_loop = []
 severity_loop = []
 
 # Outer loop
@@ -143,6 +150,9 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):
     admission_model = get_inner_loop_optuna(
         X_train_whole, Y_train_whole, kf_inner, params_optuna
     )
+    # Save the fitted model and the test patients of this fold
+    admission_model["model"].save_model(models_dir / f"Admission_fold_{i_fold:03d}.json")
+    patient_id_loop.append(patient_ids[test_index])
 
     # Get probability
     pred_test = admission_model["model"].predict_proba(X_test)[:, 1]
@@ -214,17 +224,16 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):
             ths_range=ths_range,
         )
 
-    # Randomly removal with probability
-    X_test_loop = X_test.copy()
-    # Randomply remove
-    for i_features, feature_name in enumerate(inverse_removal):
-        # Remove data
-        X_test_maked = remove_random_features_fix_number(
-            X_test_loop,
-            features_num=i_features + 1,
+    # Random scenario: remove n randomly chosen features per patient
+    # (n = 1..len(inverse_removal)), each time starting from the full test data
+    for n_removed in range(1, len(inverse_removal) + 1):
+        X_test_masked = remove_random_features_fix_number(
+            X_test,
+            features_num=n_removed,
             basic_features=base_admission,
+            rng=rng,
         )
-        pred_test = admission_model["model"].predict_proba(X_test_maked)[:, 1]
+        pred_test = admission_model["model"].predict_proba(X_test_masked)[:, 1]
         # Compute metrics
         results_randomly = compute_results(
             i_fold,
@@ -232,7 +241,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):
             pred_test,
             Y_test,
             results_randomly,
-            n_removed_features=i_features + 1,
+            n_removed_features=n_removed,
             ths_range=ths_range,
         )
 
@@ -265,6 +274,10 @@ y_true_loop = pd.DataFrame(y_true_loop)
 y_true_loop = y_true_loop.T
 y_true_loop.to_csv(save_dir / "Admission_y_true.csv")
 
+# Patient ID of every prediction (same layout as Admission_predictions.csv)
+patient_id_loop = pd.DataFrame(patient_id_loop).T
+patient_id_loop.to_csv(save_dir / "Admission_patient_ID.csv")
+
 
 severity_loop = pd.DataFrame(severity_loop)
 severity_loop = severity_loop.T
@@ -289,7 +302,7 @@ experiment_setting = {
 
 # Save the experiment settings
 experiment_setting_df = pd.DataFrame.from_dict(experiment_setting, orient="index")
-experiment_setting_df.to_csv(save_dir / "experiment_settings_Full_model_strict_reg.csv")
+experiment_setting_df.to_csv(save_dir / "experiment_settings_Admission_model.csv")
 print("Experiment finished")
 
 # %%
