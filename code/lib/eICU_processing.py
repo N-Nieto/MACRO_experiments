@@ -30,6 +30,67 @@ def _read_csv_for_patients(
     return pd.concat(chunks, ignore_index=True)
 
 
+MINUTES_PER_DAY = 1440
+
+# Outcome labels available for the eICU validation cohort. eICU has no
+# follow-up after hospital discharge, so 30-day mortality cannot be observed
+# directly; the "_30d_" labels count in-hospital deaths within 30 days and
+# treat patients discharged alive (or dying in hospital after day 30) as
+# survivors.
+EICU_OUTCOMES = {
+    "in_hospital_death": "Died before hospital discharge (hospitaldischargestatus)",
+    "in_hospital_death_30d_icu": "Died in hospital within 30 days of ICU admission",
+    "in_hospital_death_30d_hospital": "Died in hospital within 30 days of hospital admission",
+    "icu_death": "Died before ICU discharge (unitdischargestatus)",
+}
+
+
+def eicu_outcomes(patients: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build all eICU outcome labels plus the early-death flag.
+
+    Expects the columns returned by load_eicu_patient_information (statuses
+    already mapped to 0/1). For patients who died in hospital, the hospital
+    discharge offset is the time of death.
+
+    Returns:
+        pd.DataFrame indexed by patientunitstayid with one 0/1 column per key
+        of EICU_OUTCOMES (NaN when the status is unknown), plus
+        ``death_within_24h`` (died in hospital < 24 h after ICU admission,
+        the equivalent of the 90 CULPRIT-SHOCK early deaths excluded from the
+        Full model) and ``days_icu_admission_to_hospital_discharge``.
+    """
+    df = patients.set_index("patientunitstayid")
+    if not df.index.is_unique:
+        raise ValueError("eicu_outcomes expects one row per patientunitstayid")
+    died = df["hospitaldischargestatus"]
+    # Minutes from ICU admission / hospital admission to hospital discharge
+    # (= time of death for patients who died in hospital)
+    min_from_icu = df["hospitaldischargeoffset"]
+    min_from_hosp = df["hospitaldischargeoffset"] - df["hospitaladmitoffset"]
+
+    def died_within(minutes: pd.Series, limit: float, inclusive: bool) -> pd.Series:
+        in_time = minutes <= limit if inclusive else minutes < limit
+        label = ((died == 1) & in_time).astype(float)
+        # Unknown status, or death with unknown time -> unknown label
+        return label.mask(died.isna() | ((died == 1) & minutes.isna()))
+
+    out = pd.DataFrame(index=df.index)
+    out["in_hospital_death"] = died.astype(float)
+    out["in_hospital_death_30d_icu"] = died_within(
+        min_from_icu, 30 * MINUTES_PER_DAY, inclusive=True
+    )
+    out["in_hospital_death_30d_hospital"] = died_within(
+        min_from_hosp, 30 * MINUTES_PER_DAY, inclusive=True
+    )
+    out["icu_death"] = df["unitdischargestatus"].astype(float)
+    out["death_within_24h"] = died_within(
+        min_from_icu, MINUTES_PER_DAY, inclusive=False
+    )
+    out["days_icu_admission_to_hospital_discharge"] = min_from_icu / MINUTES_PER_DAY
+    return out
+
+
 def eICU_admission_heart_function(
     root_dir: str,
     plausible_range: Sequence[tuple[float, float, str]],
@@ -63,7 +124,7 @@ def eICU_admission_heart_function(
     # Remove data older than one day
     heart_data = heart_data[heart_data["observationoffset"] > time_after_cut_off]
     # Drop timing column
-    heart_data.drop(labels="observationoffset", axis=1, inplace=True)
+    heart_data = heart_data.drop(labels="observationoffset", axis=1)
 
     # Iterate over each range in plausible_range
     # to help removing outliers in the data
@@ -108,7 +169,7 @@ def eICU_aperiodic_pressure(
     # Remove data older than one day
     BP = BP[BP["observationoffset"] > time_after_cut_off]
     # Drop timing columne
-    BP.drop(labels="observationoffset", axis=1, inplace=True)
+    BP = BP.drop(labels="observationoffset", axis=1)
 
     # Iterate over each range in plausible_range
     # to help removing outliers in the data
@@ -162,7 +223,7 @@ def group_features(data: pd.DataFrame, features_group: dict) -> pd.DataFrame:
     # Create new columns for each feature group
     for group, features in features_group.items():
         data[group] = (data[features].sum(axis=1) > 0).astype(int)
-        data.drop(features, axis=1, inplace=True)
+        data = data.drop(features, axis=1)
 
     return data
 

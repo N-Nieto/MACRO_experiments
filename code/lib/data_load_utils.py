@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from lib.eICU_processing import EICU_OUTCOMES
 from lib.unit_harmonization import (
     ck_unit_harmonization,
     creatine_unit_harmonization,
@@ -59,7 +60,7 @@ def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
     # Keep the information for the first day.
     lab_info = lab_info[lab_info["icu_lab_day_text"] == 1]
     # The day information is not longer required
-    lab_info.drop(columns="icu_lab_day_text", inplace=True)
+    lab_info = lab_info.drop(columns="icu_lab_day_text")
 
     # Load clip data
     clip_info = data["clip"]
@@ -71,7 +72,7 @@ def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
     # Get clip information only for TIME V1 == Admission
     clip_info = clip_info[clip_info["time"] == "V1"]
     # Time information is not longer required
-    clip_info.drop(columns="time", inplace=True)
+    clip_info = clip_info.drop(columns="time")
 
     # First merge patient and lab data
     data_final = pd.merge(patient_info, lab_info, on="patient_ID")
@@ -242,7 +243,7 @@ def add_catecholamine_therapy(
         cate["date_cate_start"] - admission_date["date_admission"]
     ).dt.days.isin([0, 1])
     cate_df = cate.groupby("patient_ID")["cathecholamine_therapy"].any().reset_index()
-    cate_df.replace({True: 1, False: 0}, inplace=True)
+    cate_df["cathecholamine_therapy"] = cate_df["cathecholamine_therapy"].astype(int)
 
     patient_info = pd.merge(patient_info, cate_df, on="patient_ID")
 
@@ -280,7 +281,7 @@ def add_renal_replacement_therapy(
         rrt["date_rrt_start"] - admission_date["date_admission"]
     ).dt.days.isin([0, 1])
     rrt_df = rrt.groupby("patient_ID")["renal_replacement_therapy"].any().reset_index()
-    rrt_df.replace({True: 1, False: 0}, inplace=True)
+    rrt_df["renal_replacement_therapy"] = rrt_df["renal_replacement_therapy"].astype(int)
 
     patient_X = patient_X.merge(rrt_df, on="patient_ID", how="left")
 
@@ -309,7 +310,7 @@ def add_sepsis(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
         dates["date_sepsis_start"] - dates["date_admission"]
     ).dt.days.isin([0, 1])
     sepsis_df = dates.groupby("patient_ID")["sepsis"].any().reset_index()
-    sepsis_df.replace({True: 1, False: 0}, inplace=True)
+    sepsis_df["sepsis"] = sepsis_df["sepsis"].astype(int)
 
     patient_info = pd.merge(patient_info, sepsis_df, on="patient_ID")
 
@@ -340,7 +341,7 @@ def add_ventricular_fibrillation(
         dates["date_vf_start"] - dates["date_admission"]
     ).dt.days.isin([0, 1])
     vf_df = dates.groupby("patient_ID")["ventricular_fibrillation"].any().reset_index()
-    vf_df.replace({True: 1, False: 0}, inplace=True)
+    vf_df["ventricular_fibrillation"] = vf_df["ventricular_fibrillation"].astype(int)
 
     patient_info = pd.merge(patient_info, vf_df, on="patient_ID")
 
@@ -369,7 +370,7 @@ def add_stroke(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
         dates["date_stroke_start"] - dates["date_admission"]
     ).dt.days.isin([0, 1])
     stroke_df = dates.groupby("patient_ID")["stroke"].any().reset_index()
-    stroke_df.replace({True: 1, False: 0}, inplace=True)
+    stroke_df["stroke"] = stroke_df["stroke"].astype(int)
 
     patient_info = pd.merge(patient_info, stroke_df, on="patient_ID")
 
@@ -396,38 +397,68 @@ def add_resusitation_24hs(patient_info: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_eICU(
-    data_dir: Path, features: str, X_CULPRIT: pd.DataFrame
+    data_dir: Path,
+    features: str,
+    X_CULPRIT: pd.DataFrame,
+    outcome: str = "in_hospital_death",
+    exclude_early_deaths: bool | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """
-    Load and preprocess eICU data to match the structure of CULPRIT data.
+    Load the preprocessed eICU cohort (from eICU_extract_CS_patients.py) and
+    align it with the CULPRIT-SHOCK feature matrix.
 
     Parameters
     ----------
-    data_dir : str
-        The root directory containing the eICU preprocessed data.
+    data_dir : Path
+        Folder that contains ``eicu-collaborative-research-database-2.0``.
     features : str
-        The feature set identifier to load the corresponding eICU data.
+        "Admission" or "Full".
     X_CULPRIT : pd.DataFrame
-        The CULPRIT dataset used to align column names with the eICU dataset.
+        CULPRIT-SHOCK features the model was trained on; eICU columns are
+        reordered to match (missing ones are NaN).
+    outcome : str
+        Label to use, one of lib.eICU_processing.EICU_OUTCOMES:
+        "in_hospital_death" (used in the submitted manuscript),
+        "in_hospital_death_30d_icu", "in_hospital_death_30d_hospital" or
+        "icu_death".
+    exclude_early_deaths : bool | None
+        Drop patients who died within 24 h of ICU admission. Default (None):
+        True for "Full" (matching the CULPRIT-SHOCK Full-model cohort),
+        False for "Admission".
 
     Returns
     -------
     tuple[pd.DataFrame, np.ndarray]
-        A tuple containing:
-        - X_eicu (pd.DataFrame): The preprocessed eICU feature data aligned with CULPRIT columns.
-        - Y_test_eicu (np.ndarray): The target labels for the eICU dataset.
+        X_eicu (indexed by patientunitstayid) and the 0/1 labels.
     """
+    if features not in ("Admission", "Full"):
+        raise ValueError(f"features must be 'Admission' or 'Full', got {features!r}")
+    if outcome not in EICU_OUTCOMES:
+        raise ValueError(f"outcome must be one of {list(EICU_OUTCOMES)}, got {outcome!r}")
+    if exclude_early_deaths is None:
+        exclude_early_deaths = features == "Full"
+
     eicu_root = (
-        data_dir / "eicu-collaborative-research-database-2.0" / "preprocessed_MACRO/"
+        Path(data_dir) / "eicu-collaborative-research-database-2.0" / "preprocessed_MACRO"
+    )
+    X_eicu = pd.read_csv(
+        eicu_root / f"X_{features}_CICU.csv", index_col="patientunitstayid"
+    )
+    outcomes = pd.read_csv(
+        eicu_root / "outcomes_CICU.csv", index_col="patientunitstayid"
+    ).loc[X_eicu.index]
+
+    keep = outcomes[outcome].notna()
+    if exclude_early_deaths:
+        keep &= outcomes["death_within_24h"] != 1
+    print(
+        f"eICU {features}: {int(keep.sum())} patients, outcome '{outcome}' "
+        f"({int(outcomes.loc[keep, outcome].sum())} events)"
+        + (", early deaths excluded" if exclude_early_deaths else "")
     )
 
-    # Load eICU feature data
-    X_eicu = pd.read_csv(eicu_root / f"X_{features}_CICU.csv", index_col=0)
+    # Align eICU feature columns with the CULPRIT-SHOCK training columns
+    X_eicu = X_eicu.loc[keep].reindex(columns=X_CULPRIT.columns)
+    Y_eicu = outcomes.loc[keep, outcome].astype(int).to_numpy()
 
-    # Load eICU target labels
-    Y_test_eicu = pd.read_csv(eicu_root / "y_CICU.csv", index_col=0).to_numpy()
-
-    # Align eICU feature columns with CULPRIT dataset
-    X_eicu = X_eicu.reindex(columns=X_CULPRIT.columns, fill_value=np.nan)
-
-    return X_eicu, Y_test_eicu
+    return X_eicu, Y_eicu

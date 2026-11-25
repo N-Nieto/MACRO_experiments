@@ -76,9 +76,9 @@ def lactate_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
 def lactate_in_biological_range(data, lactate_measure):
 
     # Puts the data in a biologically range
-    data[lactate_measure].loc[data[lactate_measure] > 1000] /= 1000
+    data.loc[data[lactate_measure] > 1000, lactate_measure] /= 1000
     # Puts the data in a biologically range
-    data[lactate_measure].loc[data[lactate_measure] > 25] /= 100
+    data.loc[data[lactate_measure] > 25, lactate_measure] /= 100
 
     return data
 
@@ -119,11 +119,11 @@ def white_blood_count_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
     """
 
     # Apply the unit conversions to the 'White Cell Count' column
-    wcc = data["icu_lab_wct_x_x"]
+    wcc = data["icu_lab_wct_x_x"].copy()
     # Puts the data in a biologically range
-    wcc.loc[wcc > 1000] /= 1000
+    wcc[wcc > 1000] /= 1000
     # Puts the data in a biologically range
-    wcc.loc[wcc > 100] /= 100
+    wcc[wcc > 100] /= 100
 
     data['white_cell_count'] = wcc
 
@@ -149,9 +149,9 @@ def hematocrit_unit_harmonization(data: pd.DataFrame) -> pd.DataFrame:
     # Apply the unit conversions to the 'Hematocrit' column
     data['hematocrit'] = data.apply(lambda row: row['icu_lab_hct_x_x'] * unit_conversions[row['icu_lab_hctunit_c']], axis=1)    # noqa
     # Correct values
-    data['hematocrit'].loc[data['hematocrit'] > 100] /= 100
+    data.loc[data['hematocrit'] > 100, 'hematocrit'] /= 100
     # Puts the data in a biologically range
-    data['hematocrit'].loc[1 > data['hematocrit']] *= 100
+    data.loc[data['hematocrit'] < 1, 'hematocrit'] *= 100
 
     return data
 

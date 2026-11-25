@@ -110,9 +110,9 @@ def load_eicu_history(root_dir: str) -> pd.DataFrame:
     past_history = past_history.groupby("patientunitstayid").max().reset_index()
 
     # Change sick sinus syndrom to match culprit
-    past_history["sick sinus syndrome"].replace({0: -1}, inplace=True)
-    past_history["sick sinus syndrome"].replace({1: 0}, inplace=True)
-    past_history["sick sinus syndrome"].replace({-1: 1}, inplace=True)
+    past_history["sick sinus syndrome"] = past_history["sick sinus syndrome"].replace(
+        {0: 1, 1: 0}
+    )
     # Check for uniqueness of 'patientunitstayid'
     assert past_history["patientunitstayid"].nunique() == len(
         past_history["patientunitstayid"]
@@ -146,8 +146,8 @@ def eICU_load_physical_exam(root_dir):
         physicalExam, features_exam, "physicalexamvalue"
     )
 
-    physicalExam.drop("physicalexamvalue", axis=1, inplace=True)
-    physicalExam.drop("physicalexamoffset", axis=1, inplace=True)
+    physicalExam = physicalExam.drop("physicalexamvalue", axis=1)
+    physicalExam = physicalExam.drop("physicalexamoffset", axis=1)
 
     # Group different features
     features_group = {
@@ -160,7 +160,7 @@ def eICU_load_physical_exam(root_dir):
         # in the group were presented and 0 otherwise
         physicalExam[group] = (physicalExam[features].sum(axis=1) > 0).astype(int)
         # Remove the individual features that are part of the group
-        physicalExam.drop(features, axis=1, inplace=True)
+        physicalExam = physicalExam.drop(features, axis=1)
 
     # Group by 'patientunitstayid' and take the maximum value for each group
     physicalExam = physicalExam.groupby("patientunitstayid").max().reset_index()
@@ -220,16 +220,23 @@ def load_eicu_patient_information(root_dir: str) -> pd.DataFrame:
             "admissionheight",
             "admissionweight",
             "hospitaldischargestatus",
+            # Offsets (minutes from ICU admission) and ICU status, used to
+            # build the alternative outcome labels (see eicu_outcomes)
+            "hospitaladmitoffset",
+            "hospitaldischargeoffset",
+            "unitdischargeoffset",
+            "unitdischargestatus",
         ],
     )
 
-    # Data preprocessing
-    patients["age"].replace({"> 89": 90}, inplace=True)
+    # Data preprocessing (assignments, not chained inplace calls, so that it
+    # also works with pandas Copy-on-Write)
+    patients["age"] = patients["age"].replace({"> 89": 90})
 
-    patients["gender"].replace({"Female": 0, "Male": 1}, inplace=True)
-    patients["hospitaldischargestatus"].replace(
-        {"Alive": 0, "Expired": 1}, inplace=True
-    )
+    patients["gender"] = patients["gender"].map({"Female": 0, "Male": 1})
+    status = {"Alive": 0, "Expired": 1}
+    patients["hospitaldischargestatus"] = patients["hospitaldischargestatus"].map(status)
+    patients["unitdischargestatus"] = patients["unitdischargestatus"].map(status)
 
     # Data quality assertion
     assert patients["patientunitstayid"].nunique() == len(patients["patientunitstayid"])
@@ -281,7 +288,7 @@ def load_eicu_defibrillation(root_dir: str) -> pd.DataFrame:
         # in the group were presented and 0 otherwise
         treatment[group] = (treatment[features].sum(axis=1) > 0).astype(int)
         # Remove the individual features that are part of the group
-        treatment.drop(features, axis=1, inplace=True)
+        treatment = treatment.drop(features, axis=1)
 
     # Select relevant features
     selected_features = ["patientunitstayid", "Resuscitation within 24hs"]
@@ -387,7 +394,7 @@ def load_eicu_mechanical_ventilation(root_dir: str) -> pd.DataFrame:
     vent["mechanical_ventilation"] = vent["ventstartoffset"] < 60
 
     # Drop the ventstartoffset column as it's no longer needed
-    vent.drop("ventstartoffset", axis=1, inplace=True)
+    vent = vent.drop("ventstartoffset", axis=1)
 
     # Convert boolean mechanical_ventilation column to integer
     vent["mechanical_ventilation"] = vent["mechanical_ventilation"].astype(int)
@@ -583,7 +590,7 @@ def load_eicu_diabetes_mellitus(root_dir: str) -> pd.DataFrame:
     diagnosis = diagnosis[diagnosis["diagnosisoffset"] < 0]
 
     # Drop rows with missing icd9code values
-    diagnosis.dropna(subset=["icd9code"], inplace=True)
+    diagnosis = diagnosis.dropna(subset=["icd9code"])
 
     # Extract primary icd9code from comma-separated list
     diagnosis["icd9code"] = diagnosis["icd9code"].apply(lambda x: x.split(",")[0])
@@ -592,7 +599,7 @@ def load_eicu_diabetes_mellitus(root_dir: str) -> pd.DataFrame:
     diabetes_mellitus = diagnosis[diagnosis["icd9code"] == "250.00"]
 
     # Drop unnecessary columns
-    diabetes_mellitus.drop(columns=["diagnosisoffset", "icd9code"], inplace=True)
+    diabetes_mellitus = diabetes_mellitus.drop(columns=["diagnosisoffset", "icd9code"])
 
     # Group by patientunitstayid and keep only the maximum value
     diabetes_mellitus = (

@@ -107,7 +107,7 @@ def naming_for_shap(data_dir: Path, data: pd.DataFrame) -> pd.DataFrame:
     name_mapping = dict(zip(table["NAME"], table["LABEL"]))
 
     # Rename columns based on the mapping
-    data.rename(columns=name_mapping, inplace=True)
+    data = data.rename(columns=name_mapping)
 
     # Replace spaces with underscores
     data.columns = data.columns.str.replace(" ", "_")
