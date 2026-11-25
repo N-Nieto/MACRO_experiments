@@ -1,154 +1,68 @@
-# %% imports
-import os
-import pickle
+# %%
+"""
+Final Admission and Full models for the web service: each model is trained on
+all patients of its cohort with the median of the hyperparameters selected in
+the outer folds of the main experiment (Best_<model>_model_parameters.csv).
+
+The Admission model uses all patients (as in its cross-validation); the Full
+model excludes patients who died within 24 h.
+
+Outputs (output/final_models/): <model>_model.pkl and .json, <model>_explainer.pkl
+and <model>_features.csv (column order expected by the model). Missing values
+can be passed as NaN or -999.
+"""
 import sys
+from pathlib import Path
 
 import joblib
 import pandas as pd
 import shap
 from xgboost import XGBClassifier
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.append(project_root + "/code/")
-from lib.data_load_utils import get_data_from_features, load_CULPRIT_data
-from lib.data_processing import remove_low_variance_features
-from lib.experiment_definitions import get_features
-from lib.paths import CULPRIT_DIR
-
-# %% Load data
-# Get the estimators
-estimators_dir = project_root + "/output/optuna/big_experiment/"
-estimators = pd.read_csv(estimators_dir + "Best_Admission_model_parameters.csv")
-# Get the estimators for the admission
-estimators_admission = estimators[estimators["Model"] == "Admission"]
-# Get only the estimators for the fit with No Shuffled data
-estimators_admission = estimators_admission[
-    estimators_admission["Random State"] == False
-]
-
-estimators = pd.read_csv(estimators_dir + "Best_Full_model_parameters_v3.csv")
-# Get the estimators for the 24hs model
-estimators_Full = estimators[estimators["Model"] == "Full"]
-# Get only the estimators for the fit with No Shuffled data
-estimators_Full = estimators_Full[estimators_Full["Random State"] == False]
-
-data_dir = CULPRIT_DIR  # see lib/paths.py
-save_dir = project_root + "/final_models/"
-
-# Minimum feature variance
-variance_ths = 0.10
-# Get different features depending on the model
-# Get all data
-patient_info = load_CULPRIT_data(data_dir)
-
-# Removing patients that died in the first 24hs
-patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
-
-# Set target
-# endpoint to use
-endpoint_to_use = "fu_ce_death_le30d_yn"  # or "fu_ce_death_le365d_yn"
-y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
-Y = y.iloc[:, 1].to_numpy()
-
-# Extract the 24hs features
-exp_name = "Admission"
-feature_admission = get_features(exp_name)
-X_Admission = get_data_from_features(patient_info, feature_admission)
-# Remove low variance features
-X_Admission = remove_low_variance_features(X_Admission, variance_ths)
-
-
-# Removing patients that died in the first 24hs
-patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
-
-# Extract the 24hs features
-exp_name = "24hs"
-feature_24h = get_features(exp_name)
-X_24 = get_data_from_features(patient_info, feature_24h)
-
-# Remove low variance features
-X_24 = remove_low_variance_features(X_24, variance_ths)
-
-# Final data shape
-n_participants, n_features = X_24.shape
-
-# Show the feature distribution
-print("24hs features: " + str(n_features))
-
-# Get the median of the estimators for the admission
-median_admission_estimators = round(
-    estimators_admission["Number of Estimators"].median()
-)
-median_admission_alpha = estimators_admission["alpha"].median()
-median_admission_lambda = estimators_admission["lambda"].median()
-median_admission_eta = estimators_admission["eta"].median()
-median_admission_max_depth = round(estimators_admission["max_depth"].median())
-
-# Get the median of the estimators for the Full
-median_Full_estimators = round(estimators_Full["Number of Estimators"].median())
-median_Full_alpha = estimators_Full["alpha"].median()
-median_Full_lambda = estimators_Full["lambda"].median()
-median_Full_eta = estimators_Full["eta"].median()
-median_Full_max_depth = round(estimators_Full["max_depth"].median())
-
-
-# Create a model with the median of all the estimators
-final_admission_model = XGBClassifier(
-    n_estimators=median_admission_estimators,
-    reg_alpha=median_admission_alpha,
-    reg_lambda=median_admission_lambda,
-    eta=median_admission_eta,
-    max_depth=median_admission_max_depth,
-    missing=-999,
-    eval_metric="auc",
-    random_state=23,
-    verbosity=0,
-    n_jobs=-1,
-)
-
-# Create a model with the median of all the estimators
-final_24hs_model = XGBClassifier(
-    n_estimators=median_Full_estimators,
-    reg_alpha=median_Full_alpha,
-    reg_lambda=median_Full_lambda,
-    eta=median_Full_eta,
-    max_depth=median_Full_max_depth,
-    missing=-999,
-    eval_metric="auc",
-    random_state=23,
-    verbosity=0,
-    n_jobs=-1,
-)
-
-# Fit the models with the Whole dataset
-final_admission_model.fit(X_Admission, Y)
-final_24hs_model.fit(X_24, Y)
-
-# Initialize variables for shaply values from Admission
-explainer_admission = shap.Explainer(final_admission_model)
-# Initialize variables for shaply values from 24hs
-explainer_full = shap.Explainer(final_24hs_model)
-
-# # Save the models in the web_service direction.
-joblib.dump(final_admission_model, save_dir + "Admission_model.pkl")
-joblib.dump(final_24hs_model, save_dir + "Full_model.pkl")
+sys.path.append(str(Path(__file__).resolve().parent))
+from lib.data_load_utils import load_CULPRIT_data
+from lib.experiment_config import RANDOM_STATE, get_model_data
+from lib.paths import CULPRIT_DIR, OUTPUT_DIR
+from lib.utils import ensure_dir
 
 # %%
+save_dir = OUTPUT_DIR / "final_models"
+ensure_dir(save_dir)
 
-# Create the SHAP explainer
-explainer_admission = shap.Explainer(final_admission_model)
-explainer_Full = shap.Explainer(final_24hs_model)
-
-# Save the explainer
-joblib.dump(explainer_admission, save_dir + "Admission_explainer.pkl")
-joblib.dump(explainer_Full, save_dir + "Full_explainer.pkl")
+patient_info = load_CULPRIT_data(CULPRIT_DIR)
 
 # %%
-# Save the explainer
-with open("explainer_admission.pkl", "wb") as f:
-    pickle.dump(explainer_admission, f)
+for model_name in ["Admission", "Full"]:
+    # Hyperparameters chosen in the outer folds (non-shuffled labels)
+    estimators = pd.read_csv(
+        OUTPUT_DIR / f"{model_name}_model" / f"Best_{model_name}_model_parameters.csv"
+    )
+    estimators = estimators[~estimators["Random State"].astype(bool)]
+    if estimators.empty:
+        raise ValueError(f"No hyperparameters found for the {model_name} model")
 
-# %%
-with open("explainer_admission.pkl", "wb") as f:
-    explainer_admission.save(f)
+    X, Y, _ = get_model_data(patient_info, model_name)
+
+    # Model with the median of the fold hyperparameters
+    final_model = XGBClassifier(
+        n_estimators=round(estimators["Number of Estimators"].median()),
+        reg_alpha=estimators["alpha"].median(),
+        reg_lambda=estimators["lambda"].median(),
+        learning_rate=estimators["eta"].median(),
+        max_depth=round(estimators["max_depth"].median()),
+        missing=-999,  # NaN is treated as missing as well
+        eval_metric="auc",
+        random_state=RANDOM_STATE,
+        verbosity=0,
+        n_jobs=-1,
+    )
+    final_model.fit(X, Y)
+    print(f"{model_name}: trained on {X.shape[0]} patients, {X.shape[1]} features")
+
+    joblib.dump(final_model, save_dir / f"{model_name}_model.pkl")
+    final_model.save_model(save_dir / f"{model_name}_model.json")
+    joblib.dump(shap.Explainer(final_model), save_dir / f"{model_name}_explainer.pkl")
+    pd.Series(X.columns, name="feature").to_csv(save_dir / f"{model_name}_features.csv")
+
+print("Final models saved in " + str(save_dir))
 # %%

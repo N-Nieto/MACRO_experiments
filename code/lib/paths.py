@@ -28,3 +28,6 @@ EICU_PREPROCESSED_DIR = EICU_DIR / "preprocessed_MACRO"
 OUTPUT_DIR = REPO_DIR / (
     "output_quick" if os.environ.get("MACRO_QUICK", "0") == "1" else "output"
 )
+
+# Missing-value baseline results are kept next to their script
+MISSING_VALUES_DIR = REPO_DIR / "code" / "missing_value_analysis" / OUTPUT_DIR.name / "missing_values"
