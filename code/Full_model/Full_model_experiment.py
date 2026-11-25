@@ -1,37 +1,36 @@
 # %%
 import sys
-import optuna
 import timeit
-import numpy as np
-import pandas as pd
 from pathlib import Path
 
+import numpy as np
+import optuna
+import pandas as pd
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-project_dir = Path().resolve().parents[1]
+project_dir = Path.cwd().parents[1]
 sys.path.append(str(project_dir / "code/"))
-from lib.utils import ensure_dir  # noqa
-
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features  # noqa
-from lib.experiment_definitions import get_features, get_important_features  # noqa
-from lib.data_processing import (  # noqa
+from lib.data_load_utils import get_data_from_features, load_CULPRIT_data
+from lib.data_processing import (
     remove_low_variance_features,
     remove_random_features_fix_number,
 )
-from lib.ml_utils import (  # noqa
+from lib.experiment_definitions import get_features, get_important_features
+from lib.ml_utils import (
     compute_results,
+    estimator_to_df,
     get_inner_loop_optuna,
     results_to_df,
     save_best_model_params,
-    estimator_to_df,
 )
+from lib.utils import ensure_dir
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 # %%
 # Data is stored outside the project
-data_dir = project_dir.parents[1] / "data" / "CULPRIT/"
+data_dir = project_dir.parents[1] / "Data MODS" / "data" / "CULPRIT/"
 save_dir = project_dir / "output" / "Full_model/"
 ensure_dir(save_dir)
 
@@ -133,7 +132,7 @@ y_true_loop = []
 # Time to run the experiment
 print("Running experiment")
 starttime = timeit.default_timer()
-for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
+for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):
     print("FOLD: " + str(i_fold))
 
     # Patients used for train and internal XGB validation
@@ -153,7 +152,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
     # Get probability
     pred_test = full_model["model"].predict_proba(X_test)[:, 1]
 
-    pred_train = full_model["model"].predict_proba(X_train_whole)[:, 1]  # noqa
+    pred_train = full_model["model"].predict_proba(X_train_whole)[:, 1]
     # Compute test metrics
     results_training = compute_results(
         i_fold,
@@ -170,7 +169,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
     )
     # Compute metrics
     predictions_full.append(pred_test)
-    y_true_loop.append(Y_test)  # noqa
+    y_true_loop.append(Y_test)
 
     # Compute metrics without removing any feature
     results_direct = compute_results(
@@ -204,7 +203,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
         # Remove feature from the test
         X_test_loop.loc[:, feature_name] = np.nan
         # Generate a prediction with the new test data
-        pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]  # noqa
+        pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]
         # Compute metrics
         results_direct = compute_results(
             i_fold,
@@ -222,7 +221,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
         # Remove feature from the test
         X_test_loop.loc[:, feature_name] = np.nan
         # Generate a prediction with the new test data
-        pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]  # noqa
+        pred_test = full_model["model"].predict_proba(X_test_loop)[:, 1]
         # Compute metrics
         results_inverse = compute_results(
             i_fold,
@@ -241,10 +240,10 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
         # Store 24hs predictions
         X_test_maked = remove_random_features_fix_number(
             X_test_loop,
-            features_num=i_features + 1,  # noqa
+            features_num=i_features + 1,
             basic_features=feature_admission,
-        )  # noqa
-        pred_test = full_model["model"].predict_proba(X_test_maked)[:, 1]  # noqa
+        )
+        pred_test = full_model["model"].predict_proba(X_test_maked)[:, 1]
         # Compute metrics
         results_randomly = compute_results(
             i_fold,
@@ -269,44 +268,42 @@ results_estimators = estimator_to_df(results_estimators)
 
 # % Saving results
 print("Saving Results")
-results_randomly_df.to_csv(save_dir / "Full_random_remove.csv")  # noqa
-results_direct_df.to_csv(save_dir / "Full_direct_remove.csv")  # noqa
-results_inverse_df.to_csv(save_dir / "Full_inverse_remove.csv")  # noqa
-results_training_df.to_csv(save_dir / "Full_training.csv")  # noqa
+results_randomly_df.to_csv(save_dir / "Full_random_remove.csv")
+results_direct_df.to_csv(save_dir / "Full_direct_remove.csv")
+results_inverse_df.to_csv(save_dir / "Full_inverse_remove.csv")
+results_training_df.to_csv(save_dir / "Full_training.csv")
 
-results_estimators.to_csv(save_dir / "Best_Full_model_parameters.csv")  # noqa
+results_estimators.to_csv(save_dir / "Best_Full_model_parameters.csv")
 
 predictions_full = pd.DataFrame(predictions_full)
 predictions_full = predictions_full.T
-predictions_full.to_csv(save_dir / "Full_predictions.csv")  # noqa
+predictions_full.to_csv(save_dir / "Full_predictions.csv")
 
 y_true_loop = pd.DataFrame(y_true_loop)
 y_true_loop = y_true_loop.T
-y_true_loop.to_csv(save_dir / "Full_y_true.csv")  # noqa
+y_true_loop.to_csv(save_dir / "Full_y_true.csv")
 
 # %%
 # Create a experiment summary
-experiment_setting = dict(
-    data_dir=data_dir,
-    save_dir=save_dir,
-    random_state=random_state,
-    out_n_splits=out_n_splits,
-    endpoint_to_use=endpoint_to_use,
-    out_n_repetitions=out_n_repetitions,
-    inner_n_splits=inner_n_splits,
-    variance_ths=variance_ths,
-    ths_range=ths_range,
-    params_optuna=params_optuna,
-    n_participants=n_participants,
-    n_features=n_features,
-    experiment_timing=timeit.default_timer() - starttime,
-)
+experiment_setting = {
+    "data_dir": data_dir,
+    "save_dir": save_dir,
+    "random_state": random_state,
+    "out_n_splits": out_n_splits,
+    "endpoint_to_use": endpoint_to_use,
+    "out_n_repetitions": out_n_repetitions,
+    "inner_n_splits": inner_n_splits,
+    "variance_ths": variance_ths,
+    "ths_range": ths_range,
+    "params_optuna": params_optuna,
+    "n_participants": n_participants,
+    "n_features": n_features,
+    "experiment_timing": timeit.default_timer() - starttime,
+}
 
 # Save the experiment settings
 experiment_setting_df = pd.DataFrame.from_dict(experiment_setting, orient="index")
-experiment_setting_df.to_csv(
-    save_dir / "experiment_settings_Full_model_strict_reg.csv"
-)
+experiment_setting_df.to_csv(save_dir / "experiment_settings_Full_model_strict_reg.csv")
 print("Experiment finished")
 
 # %%

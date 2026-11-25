@@ -1,34 +1,35 @@
 # %%
 import sys
-import optuna
 import timeit
-import numpy as np
-import pandas as pd
 from pathlib import Path
 
+import numpy as np
+import optuna
+import pandas as pd
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
+
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-project_dir = Path().resolve().parents[1]
+project_dir = Path.cwd().parents[1]
 sys.path.append(str(project_dir / "code/"))
-from lib.utils import ensure_dir    # noqa
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features       # noqa
-from lib.experiment_definitions import get_features, get_important_features     # noqa
-from lib.data_processing import (                                               # noqa
+from lib.data_load_utils import get_data_from_features, load_CULPRIT_data
+from lib.data_processing import (
     remove_low_variance_features,
     remove_random_features_fix_number,
 )
-from lib.ml_utils import (                                                      # noqa
+from lib.experiment_definitions import get_features, get_important_features
+from lib.ml_utils import (
     compute_results,
+    estimator_to_df,
     get_inner_loop_optuna,
     results_to_df,
     save_best_model_params,
-    estimator_to_df,
 )
+from lib.utils import ensure_dir
 
 # %%
 # Data is stored outside the project
-data_dir = project_dir.parents[1] / "data" / "CULPRIT/"
+data_dir = project_dir.parents[1] / "Data MODS" / "data" / "CULPRIT/"
 save_dir = project_dir / "output" / "Admission_model/"
 ensure_dir(save_dir)
 # Minimun feature variance
@@ -125,7 +126,7 @@ severity_loop = []
 # Outer loop
 print("Running experiment")
 starttime = timeit.default_timer()
-for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
+for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):
     print("FOLD: " + str(i_fold))
 
     # Patients used for train and internal XGB validation
@@ -155,7 +156,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
         Y_train_whole,
         results_training,
         ths_range=ths_range,
-    )  # noqa
+    )
 
     # Compute train metrics
     results_estimators = save_best_model_params(
@@ -163,19 +164,19 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
     )
     # Compute metrics
     predictions.append(pred_test)
-    y_true_loop.append(Y_test)  # noqa
-    severity_loop.append(severity_test)  # noqa
+    y_true_loop.append(Y_test)
+    severity_loop.append(severity_test)
 
     # Compute metrics without removing any feature
     results_direct = compute_results(
         i_fold, "Admission", pred_test, Y_test, results_direct, ths_range=ths_range
-    )  # noqa
+    )
     results_inverse = compute_results(
         i_fold, "Admission", pred_test, Y_test, results_inverse, ths_range=ths_range
-    )  # noqa
+    )
     results_randomly = compute_results(
         i_fold, "Admission", pred_test, Y_test, results_randomly, ths_range=ths_range
-    )  # noqa
+    )
 
     # Direct importance removal
     X_test_loop = X_test.copy()
@@ -183,7 +184,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
         # Remove feature from the test
         X_test_loop.loc[:, feature_name] = np.nan
         # Generate a prediction with the new test data (with one feature removed)
-        pred_test = admission_model["model"].predict_proba(X_test_loop)[:, 1]  # noqa
+        pred_test = admission_model["model"].predict_proba(X_test_loop)[:, 1]
         # Compute metrics
         results_direct = compute_results(
             i_fold,
@@ -201,7 +202,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
         # Remove feature from the test
         X_test_loop.loc[:, feature_name] = np.nan
         # Generate a prediction with the new test data (with one feature removed)
-        pred_test = admission_model["model"].predict_proba(X_test_loop)[:, 1]  # noqa
+        pred_test = admission_model["model"].predict_proba(X_test_loop)[:, 1]
         # Compute metrics
         results_inverse = compute_results(
             i_fold,
@@ -223,7 +224,7 @@ for i_fold, (train_index, test_index) in enumerate(kf_out.split(X, Y)):  # noqa
             features_num=i_features + 1,
             basic_features=base_admission,
         )
-        pred_test = admission_model["model"].predict_proba(X_test_maked)[:, 1]  # noqa
+        pred_test = admission_model["model"].predict_proba(X_test_maked)[:, 1]
         # Compute metrics
         results_randomly = compute_results(
             i_fold,
@@ -270,27 +271,25 @@ severity_loop = severity_loop.T
 severity_loop.to_csv(save_dir / "Admission_severity.csv")
 
 # Create a experiment summary
-experiment_setting = dict(
-    data_dir=data_dir,
-    save_dir=save_dir,
-    random_state=random_state,
-    out_n_splits=out_n_splits,
-    endpoint_to_use=endpoint_to_use,
-    out_n_repetitions=out_n_repetitions,
-    inner_n_splits=inner_n_splits,
-    variance_ths=variance_ths,
-    ths_range=ths_range,
-    params_optuna=params_optuna,
-    n_participants=n_participants,
-    n_features=n_features,
-    experiment_timing=timeit.default_timer() - starttime,
-)
+experiment_setting = {
+    "data_dir": data_dir,
+    "save_dir": save_dir,
+    "random_state": random_state,
+    "out_n_splits": out_n_splits,
+    "endpoint_to_use": endpoint_to_use,
+    "out_n_repetitions": out_n_repetitions,
+    "inner_n_splits": inner_n_splits,
+    "variance_ths": variance_ths,
+    "ths_range": ths_range,
+    "params_optuna": params_optuna,
+    "n_participants": n_participants,
+    "n_features": n_features,
+    "experiment_timing": timeit.default_timer() - starttime,
+}
 
 # Save the experiment settings
 experiment_setting_df = pd.DataFrame.from_dict(experiment_setting, orient="index")
-experiment_setting_df.to_csv(
-    save_dir / "experiment_settings_Full_model_strict_reg.csv"
-)
+experiment_setting_df.to_csv(save_dir / "experiment_settings_Full_model_strict_reg.csv")
 print("Experiment finished")
 
 # %%

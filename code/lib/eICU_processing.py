@@ -1,50 +1,66 @@
-import pandas as pd
-import numpy as np
-import joblib
 import os
+
+import joblib
+import numpy as np
+import pandas as pd
 
 
 def eICU_filter_CS_patients(data, CICU=True):
 
     if CICU:
-        print("Only keeping patients admited in the Cardiac ICU")
-        data = data[data["unittype"] == 'Cardiac ICU']
-    CS_patients = data[data["icd9code"] == str(785.51)]      # noqa
+        print("Only keeping patients admitted in the Cardiac ICU")
+        data = data[data["unittype"] == "Cardiac ICU"]
+    CS_patients = data[data["icd9code"] == str(785.51)]
 
     return CS_patients
 
 
-def eICU_admission_heart_function(root_dir, plausible_range,
-                                  selected_patients=None,
-                                  time_before_cut_off=60,
-                                  time_after_cut_off=-1440,
-                                  prefilter=True):
+def eICU_admission_heart_function(
+    root_dir,
+    plausible_range,
+    selected_patients=None,
+    time_before_cut_off=60,
+    time_after_cut_off=-1440,
+    prefilter=True,
+):
 
-    usecols = ["patientunitstayid", "observationoffset",
-               "heartrate", "systemicsystolic", "systemicdiastolic"]
+    usecols = [
+        "patientunitstayid",
+        "observationoffset",
+        "heartrate",
+        "systemicsystolic",
+        "systemicdiastolic",
+    ]
     # Load the pre-filtered data for faster processing
     if prefilter:
-        heart_data = pd.read_csv(root_dir + "vitalPeriodic_selected_MACRO.csv.gz",                  # noqa
-                                 usecols=usecols)
+        heart_data = pd.read_csv(
+            root_dir + "vitalPeriodic_selected_MACRO.csv.gz",
+            usecols=usecols,
+        )
     else:
         # Load the raw data and keep the selected patients
         selected_patients = selected_patients.tolist()
-        heart_data = pd.read_csv(root_dir + "vitalPeriodic_selected_MACRO.csv.gz",                  # noqa
-                                 usecols=usecols)
+        heart_data = pd.read_csv(
+            root_dir + "vitalPeriodic_selected_MACRO.csv.gz",
+            usecols=usecols,
+        )
         # Keep only the CS patients for faster processing
-        heart_data = heart_data[heart_data["patientunitstayid"].isin(selected_patients)]            # noqa
+        heart_data = heart_data[heart_data["patientunitstayid"].isin(selected_patients)]
     # Remove the data after one Hour
-    heart_data = heart_data[heart_data['observationoffset'] < time_before_cut_off]                  # noqa
+    heart_data = heart_data[heart_data["observationoffset"] < time_before_cut_off]
     # Remove data older than one day
-    heart_data = heart_data[heart_data['observationoffset'] > time_after_cut_off]                   # noqa
-    # Drop timing columne
+    heart_data = heart_data[heart_data["observationoffset"] > time_after_cut_off]
+    # Drop timing column
     heart_data.drop(labels="observationoffset", axis=1, inplace=True)
 
     # Iterate over each range in plausible_range
     # to help removing outliers in the data
     for min_val, max_val, column in plausible_range:
         # Replace values outside the range with NaN for the specified column
-        heart_data[column] = heart_data[column].where((heart_data[column] >= min_val) & (heart_data[column] <= max_val), other=np.nan)      # noqa
+        heart_data[column] = heart_data[column].where(
+            (heart_data[column] >= min_val) & (heart_data[column] <= max_val),
+            other=np.nan,
+        )
 
     # Group the data by the median
     heart_data = heart_data.groupby("patientunitstayid").median().reset_index()
@@ -52,25 +68,33 @@ def eICU_admission_heart_function(root_dir, plausible_range,
     return heart_data
 
 
-def eICU_aperiodic_preassure(root_dir, plausible_range,
-                             selected_patients,
-                             time_before_cut_off=30,
-                             time_after_cut_off=-1440,
-                             ):
+def eICU_aperiodic_pressure(
+    root_dir,
+    plausible_range,
+    selected_patients,
+    time_before_cut_off=30,
+    time_after_cut_off=-1440,
+):
 
-    usecols = ["patientunitstayid", "observationoffset",
-               "noninvasivesystolic", "noninvasivediastolic"]
+    usecols = [
+        "patientunitstayid",
+        "observationoffset",
+        "noninvasivesystolic",
+        "noninvasivediastolic",
+    ]
 
-    BP = pd.read_csv(root_dir + "vitalAperiodic.csv.gz",                  # noqa
-                     usecols=usecols)
+    BP = pd.read_csv(
+        root_dir + "vitalAperiodic.csv.gz",
+        usecols=usecols,
+    )
 
     selected_patients = selected_patients.tolist()
     # Keep only the CS patients for faster processing
-    BP = BP[BP["patientunitstayid"].isin(selected_patients)]            # noqa
+    BP = BP[BP["patientunitstayid"].isin(selected_patients)]
     # Remove the data after one Hour
-    BP = BP[BP['observationoffset'] < time_before_cut_off]                  # noqa
+    BP = BP[BP["observationoffset"] < time_before_cut_off]
     # Remove data older than one day
-    BP = BP[BP['observationoffset'] > time_after_cut_off]                   # noqa
+    BP = BP[BP["observationoffset"] > time_after_cut_off]
     # Drop timing columne
     BP.drop(labels="observationoffset", axis=1, inplace=True)
 
@@ -78,7 +102,9 @@ def eICU_aperiodic_preassure(root_dir, plausible_range,
     # to help removing outliers in the data
     for min_val, max_val, column in plausible_range:
         # Replace values outside the range with NaN for the specified column
-        BP[column] = BP[column].where((BP[column] >= min_val) & (BP[column] <= max_val), other=np.nan)      # noqa
+        BP[column] = BP[column].where(
+            (BP[column] >= min_val) & (BP[column] <= max_val), other=np.nan
+        )
 
     # Group the data by the median
     BP = BP.groupby("patientunitstayid").median().reset_index()
@@ -87,9 +113,9 @@ def eICU_aperiodic_preassure(root_dir, plausible_range,
 
 
 # General propose functions
-def process_individual_features(data: pd.DataFrame,
-                                features_list: list,
-                                field: str) -> pd.DataFrame:
+def process_individual_features(
+    data: pd.DataFrame, features_list: list, field: str
+) -> pd.DataFrame:
     """
     Process individual features in the patient data.
     Return 1 where the feature is found
@@ -130,17 +156,17 @@ def group_features(data: pd.DataFrame, features_group: dict) -> pd.DataFrame:
 
 
 # Define a function to create new labname based on laboffset
-def diferent_lactate_timing(row):
-    if row['labname'] == 'lactate':
-        if row['labresultoffset'] <= 0:
-            return 'admission_lactate'
-        elif 0 < row['labresultoffset'] <= 480:
-            return 'icu_lab_lact8hpci_x'
-        elif 480 < row['labresultoffset'] <= 960:
-            return 'icu_lab_lact16hpci_x'
-        elif 960 < row['labresultoffset'] <= 1440:
-            return 'icu_lab_lact24hpci_x'
-    return row['labname']
+def different_lactate_timing(row):
+    if row["labname"] == "lactate":
+        if row["labresultoffset"] <= 0:
+            return "admission_lactate"
+        elif 0 < row["labresultoffset"] <= 480:
+            return "icu_lab_lact8hpci_x"
+        elif 480 < row["labresultoffset"] <= 960:
+            return "icu_lab_lact16hpci_x"
+        elif 960 < row["labresultoffset"] <= 1440:
+            return "icu_lab_lact24hpci_x"
+    return row["labname"]
 
 
 # eICU to CULPRIT unit Harmonize functions
@@ -176,31 +202,33 @@ def admission_name_matching(X_admission: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: DataFrame containing the admission data corrected.
     """
     # Define mapping from original column names to model feature names
-    admission_colume_mapping = {'gender': "had_dem_male_yn",
-                                'age': "had_dem_age_yr",
-                                'admissionheight': 'had_pex_height_cm',
-                                'admissionweight': 'had_pex_weight_kg',
-                                'Atrial fibrillation': 'hpr_ecg_afib_y',
-                                'hypertension requiring treatment': 'p_rf_aht_yn',                                      # noqa
-                                'insulin dependent diabetes': 'p_rf_dm_yn',
-                                'peripheral vascular disease': 'p_mh_pad_yn',
-                                'sick sinus syndrome': 'hpr_ecg_sinrhy_y',
-                                'Known coronary artery disease': 'previous_heart_complications',                        # noqa
-                                'delusional': 'had_sy_ams_yn',
-                                'extremities cold': 'had_sy_extremity_yn',
-                                'Resuscitation within 24hs': 'had_base_cpr24h_yn',                                      # noqa
-                                'dyslipidemia': 'p_rf_dyslip_yn',
-                                'mechanical_ventilation': 'had_base_mechvent_yn',                                       # noqa
-                                'ST_elevation': 'hpr_ecg_stemi_yn',
-                                'heartrate': 'hpr_hmdyn_hr_bpm',
-                                'systemicsystolic': 'hpr_hmdyn_sbp_mmhg',
-                                'systemicdiastolic': 'hpr_hmdyn_dbp_mmhg'}
+    admission_colume_mapping = {
+        "gender": "had_dem_male_yn",
+        "age": "had_dem_age_yr",
+        "admissionheight": "had_pex_height_cm",
+        "admissionweight": "had_pex_weight_kg",
+        "Atrial fibrillation": "hpr_ecg_afib_y",
+        "hypertension requiring treatment": "p_rf_aht_yn",
+        "insulin dependent diabetes": "p_rf_dm_yn",
+        "peripheral vascular disease": "p_mh_pad_yn",
+        "sick sinus syndrome": "hpr_ecg_sinrhy_y",
+        "Known coronary artery disease": "previous_heart_complications",
+        "delusional": "had_sy_ams_yn",
+        "extremities cold": "had_sy_extremity_yn",
+        "Resuscitation within 24hs": "had_base_cpr24h_yn",
+        "dyslipidemia": "p_rf_dyslip_yn",
+        "mechanical_ventilation": "had_base_mechvent_yn",
+        "ST_elevation": "hpr_ecg_stemi_yn",
+        "heartrate": "hpr_hmdyn_hr_bpm",
+        "systemicsystolic": "hpr_hmdyn_sbp_mmhg",
+        "systemicdiastolic": "hpr_hmdyn_dbp_mmhg",
+    }
 
     # Rename columns according to the mapping
     X_admission.rename(columns=admission_colume_mapping, inplace=True)
 
     # Load admission model
-    models_root = "/home/nnieto/Nico/MODS_project/CULPRIT_project/web_service/Synchon version/MACRO/macro/data/"        # noqa
+    models_root = "/home/nnieto/Nico/MODS_project/CULPRIT_project/web_service/Synchon version/MACRO/macro/data/"
     admission_model_path = os.path.join(models_root, "model_admission.pkl")
     Admission_model = joblib.load(admission_model_path)
 
@@ -223,41 +251,42 @@ def full_model_name_matching(Full_model_data: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: DataFrame containing Full model corrected features.
     """
     # Define mapping from original column names to model feature names
-    colume_mapping = {'gender': "had_dem_male_yn",
-                      'age': "had_dem_age_yr",
-                      'admissionheight': 'had_pex_height_cm',
-                      'admissionweight': 'had_pex_weight_kg',
-                      'Atrial fibrillation': 'hpr_ecg_afib_y',
-                      'hypertension requiring treatment': 'p_rf_aht_yn',
-                      'insulin dependent diabetes': 'p_rf_dm_yn',
-                      'peripheral vascular disease': 'p_mh_pad_yn',
-                      'sick sinus syndrome': 'hpr_ecg_sinrhy_y',
-                      'Known coronary artery disease': 'previous_heart_complications',  # noqa
-                      'delusional': 'had_sy_ams_yn',
-                      'extremities cold': 'had_sy_extremity_yn',
-                      'Resuscitation within 24hs': 'had_base_cpr24h_yn',
-                      'dyslipidemia': 'p_rf_dyslip_yn',
-                      'mechanical_ventilation': 'had_base_mechvent_yn',
-                      'ST_elevation': 'hpr_ecg_stemi_yn',
-                      'heartrate': 'hpr_hmdyn_hr_bpm',
-                      'systemicsystolic': 'hpr_hmdyn_sbp_mmhg',
-                      'systemicdiastolic': 'hpr_hmdyn_dbp_mmhg',
-                      'BNP': "pbnp",
-                      'CPK': "icu_lab_ck_x",
-                      'troponin - T': 'tnt',
-                      'creatinine': 'creatine',
-                      'WBC x 1000': 'white_cell_count',
-                      'Hct': 'hematocrit',
-                      'CRP': 'crp',
-                      'PT - INR': 'icu_lab_inr_r',
-                      'glucose': 'glucose',
-                      'ALT (SGPT)': 'alat'
-                      }
+    colume_mapping = {
+        "gender": "had_dem_male_yn",
+        "age": "had_dem_age_yr",
+        "admissionheight": "had_pex_height_cm",
+        "admissionweight": "had_pex_weight_kg",
+        "Atrial fibrillation": "hpr_ecg_afib_y",
+        "hypertension requiring treatment": "p_rf_aht_yn",
+        "insulin dependent diabetes": "p_rf_dm_yn",
+        "peripheral vascular disease": "p_mh_pad_yn",
+        "sick sinus syndrome": "hpr_ecg_sinrhy_y",
+        "Known coronary artery disease": "previous_heart_complications",
+        "delusional": "had_sy_ams_yn",
+        "extremities cold": "had_sy_extremity_yn",
+        "Resuscitation within 24hs": "had_base_cpr24h_yn",
+        "dyslipidemia": "p_rf_dyslip_yn",
+        "mechanical_ventilation": "had_base_mechvent_yn",
+        "ST_elevation": "hpr_ecg_stemi_yn",
+        "heartrate": "hpr_hmdyn_hr_bpm",
+        "systemicsystolic": "hpr_hmdyn_sbp_mmhg",
+        "systemicdiastolic": "hpr_hmdyn_dbp_mmhg",
+        "BNP": "pbnp",
+        "CPK": "icu_lab_ck_x",
+        "troponin - T": "tnt",
+        "creatinine": "creatine",
+        "WBC x 1000": "white_cell_count",
+        "Hct": "hematocrit",
+        "CRP": "crp",
+        "PT - INR": "icu_lab_inr_r",
+        "glucose": "glucose",
+        "ALT (SGPT)": "alat",
+    }
     # Rename columns according to the mapping
     Full_model_data.rename(columns=colume_mapping, inplace=True)
 
     # Load full model
-    models_root = "/home/nnieto/Nico/MODS_project/CULPRIT_project/web_service/Synchon version/MACRO/macro/data/"    # noqa
+    models_root = "/home/nnieto/Nico/MODS_project/CULPRIT_project/web_service/Synchon version/MACRO/macro/data/"
     full_model_path = os.path.join(models_root, "model_full.pkl")
     Full_model = joblib.load(full_model_path)
 

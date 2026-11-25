@@ -1,22 +1,37 @@
 # %%
-import pandas as pd
-import numpy as np
 import os
 
-from lib.eICU_processing import eICU_admission_heart_function, eICU_filter_CS_patients                  # noqa
-from lib.eICU_processing import admission_name_matching, full_model_name_matching                       # noqa
-from lib.eICU_data_loading import load_eicu_history, eICU_load_physical_exam, load_eicu_diagnosis       # noqa
-from lib.eICU_data_loading import load_eicu_patient_information, load_eicu_defibrillation               # noqa
-from lib.eICU_data_loading import load_eicu_dyslipidemia, load_eicu_mechanical_ventilation              # noqa
-from lib.eICU_data_loading import load_eicu_24hs_features, load_eicu_st_segmentation                    # noqa
-from lib.eICU_data_loading import load_eicu_mechanical_support
+import numpy as np
+import pandas as pd
+from lib.eICU_data_loading import (
+    eICU_load_physical_exam,
+    load_eicu_24hs_features,
+    load_eicu_defibrillation,
+    load_eicu_diagnosis,
+    load_eicu_dyslipidemia,
+    load_eicu_history,
+    load_eicu_mechanical_support,
+    load_eicu_mechanical_ventilation,
+    load_eicu_patient_information,
+    load_eicu_st_segmentation,
+)
+from lib.eICU_processing import (
+    admission_name_matching,
+    eICU_admission_heart_function,
+    eICU_filter_CS_patients,
+    full_model_name_matching,
+)
 
 # Data must be stored in a folder called "data" at the same hierarchy
 # as the cloned repository
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname((__file__)))))               # noqa
-data_dir = project_root+"/data/eicu-collaborative-research-database-2.0/"              # noqa
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+)
+data_dir = project_root + "/data/eicu-collaborative-research-database-2.0/"
 # please make sure to create this folder
-save_dir = project_root+"/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"     # noqa
+save_dir = (
+    project_root + "/data/eicu-collaborative-research-database-2.0/preprocessed_MACRO/"
+)
 # %%
 # Load all the diagnosis
 diagnosis = load_eicu_diagnosis(data_dir)
@@ -37,13 +52,12 @@ merge_data = eICU_filter_CS_patients(merge_data, True)
 # Remove duplicated patients
 # prioritizing endpoint=1 over endpoint=0
 # Sort DataFrame by 'endpoint' in descending order
-merge_data = merge_data.sort_values(by='hospitaldischargestatus',
-                                    ascending=False)
+merge_data = merge_data.sort_values(by="hospitaldischargestatus", ascending=False)
 # Keep only the first entry for each uniquepid
-merge_data = merge_data.drop_duplicates(subset='uniquepid', keep='first')
+merge_data = merge_data.drop_duplicates(subset="uniquepid", keep="first")
 
 # make sure that one stay for each patient is retained
-assert merge_data["patientunitstayid"].nunique() == merge_data["uniquepid"].nunique()                   # noqa
+assert merge_data["patientunitstayid"].nunique() == merge_data["uniquepid"].nunique()
 # %%
 
 past_history = load_eicu_history(root_dir=data_dir)
@@ -70,7 +84,7 @@ for col in physicalExam.columns:
 del physicalExam
 
 # %%
-# Resusitation within 24hs
+# Resuscitation within 24hs
 resuscitation = load_eicu_defibrillation(data_dir)
 
 # Merge the features with the targets and information
@@ -82,8 +96,7 @@ merge_data["Resuscitation within 24hs"].fillna(0, inplace=True)
 del resuscitation
 
 # Dyslipidemia
-dyslipidemia = load_eicu_dyslipidemia(data_dir,
-                                      merge_data["patientunitstayid"])
+dyslipidemia = load_eicu_dyslipidemia(data_dir, merge_data["patientunitstayid"])
 # Merge the features with the targets and information
 merge_data = pd.merge(merge_data, dyslipidemia, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
@@ -113,12 +126,13 @@ merge_data["ST_elevation"].fillna(0, inplace=True)
 del st_elevation
 # %%
 
-plausible_range = [(20, 200, "heartrate"),
-                   (20, 200, "systemicsystolic"),
-                   (20, 200, "systemicdiastolic")]
+plausible_range = [
+    (20, 200, "heartrate"),
+    (20, 200, "systemicsystolic"),
+    (20, 200, "systemicdiastolic"),
+]
 
-HR = eICU_admission_heart_function(data_dir, plausible_range,
-                                   time_before_cut_off=30)
+HR = eICU_admission_heart_function(data_dir, plausible_range, time_before_cut_off=30)
 merge_data = pd.merge(merge_data, HR, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 
@@ -130,13 +144,20 @@ merge_data["p_rf_smoker_yn"] = np.nan
 
 y_eicu = merge_data["hospitaldischargestatus"]
 
-X_admission = merge_data.drop(["patientunitstayid", "icd9code",
-                               "unittype", "uniquepid",
-                               "hospitaldischargestatus"], axis=1)
+X_admission = merge_data.drop(
+    [
+        "patientunitstayid",
+        "icd9code",
+        "unittype",
+        "uniquepid",
+        "hospitaldischargestatus",
+    ],
+    axis=1,
+)
 
 X_admission = admission_name_matching(X_admission)
-# X_admission.to_csv(save_dir+"X_admission_CICU.csv")   # noqa
-# y_eicu.to_csv(save_dir+"y_CICU.csv")                  # noqa
+X_admission.to_csv(save_dir + "X_admission_CICU.csv")
+y_eicu.to_csv(save_dir + "y_CICU.csv")
 
 # %% 24 features
 
@@ -151,13 +172,19 @@ merge_data = pd.merge(merge_data, mechanical_support, how="outer")
 merge_data.dropna(subset="hospitaldischargestatus", inplace=True)
 # %%
 # Get only relevant features
-Full_model_data = merge_data.drop(["patientunitstayid", "icd9code",
-                                  "unittype", "uniquepid",
-                                   "hospitaldischargestatus"], axis=1)
+Full_model_data = merge_data.drop(
+    [
+        "patientunitstayid",
+        "icd9code",
+        "unittype",
+        "uniquepid",
+        "hospitaldischargestatus",
+    ],
+    axis=1,
+)
 
 Full_model_data = full_model_name_matching(Full_model_data)
-# Full_model_data.to_csv(save_dir+"X_Full_CICU.csv")    # noqa
+Full_model_data.to_csv(save_dir + "X_Full_CICU.csv")
 
 # %%
 print("DONE!")
-# %%

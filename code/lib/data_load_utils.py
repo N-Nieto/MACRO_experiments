@@ -1,18 +1,14 @@
-import pandas as pd
-import numpy as np
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from lib.unit_harmonization import (
     ck_unit_harmonization,
-    crp_unit_harmonization,
     creatine_unit_harmonization,
-)
-from lib.unit_harmonization import (
+    crp_unit_harmonization,
     glucose_unit_harmonization,
-    lactate_unit_harmonization,
-)
-from lib.unit_harmonization import (
     hematocrit_unit_harmonization,
+    lactate_unit_harmonization,
     white_blood_count_unit_harmonization,
 )
 
@@ -20,7 +16,7 @@ from lib.unit_harmonization import (
 def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
     """
     Load CULPRIT study data, keep only the first day information, and harmonize units.
-    # noqa
+
     Parameters:
         data_dir (str): The directory path where the data is located.
 
@@ -30,7 +26,7 @@ def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
 
     # Load main data
     data = pd.read_excel(
-        data_dir / "CULPRIT-data_20210407.xlsx",  # noqa
+        data_dir / "CULPRIT-data_20210407.xlsx",
         sheet_name=None,
     )
 
@@ -99,7 +95,7 @@ def load_CULPRIT_data(data_dir: Path) -> pd.DataFrame:
 
 def create_unique_patient_ID(data: pd.DataFrame) -> pd.DataFrame:
     """
-    # noqa
+    #
     Combine the center ID and the patient ID to generate a unique ID.
 
     Parameters:
@@ -179,8 +175,8 @@ def calcule_CLIP_score_from_features(data: pd.DataFrame) -> pd.DataFrame:
 
     Linear_predictor = (
         -15.8532036 + 0.06714669 * C + 1.0287073 * L + 0.2704829 * Inter + 0.1923877 * P
-    )  # noqa
-    data["CLIP_Score"] = 100 * np.exp(Linear_predictor) / (1 + np.exp(Linear_predictor))  # noqa
+    )
+    data["CLIP_Score"] = 100 * np.exp(Linear_predictor) / (1 + np.exp(Linear_predictor))
 
     return data
 
@@ -197,7 +193,7 @@ def create_admission_lactate(patient_info: pd.DataFrame) -> pd.DataFrame:
     """
     patient_info["admission_lactate"] = patient_info[
         "icu_lab_lactpopci_x"
-    ].combine_first(patient_info["icu_lab_lactprepci_x"])  # noqa
+    ].combine_first(patient_info["icu_lab_lactprepci_x"])
     return patient_info
 
 
@@ -227,7 +223,7 @@ def add_catecholamine_therapy(
     Parameters:
         data: The input data.
         patient_info (pd.DataFrame): DataFrame containing patient information.
-    # noqa
+
     Returns:
         pd.DataFrame: Updated patient_info DataFrame with 'cathecholamine_therapy' column.
     """
@@ -240,12 +236,12 @@ def add_catecholamine_therapy(
     cate["date_cate_start"] = pd.to_datetime(cate["icu_catec_start_date"])
     admission_date["date_admission"] = pd.to_datetime(
         admission_date["had_base_admis_date"]
-    )  # noqa
+    )
 
     cate["cathecholamine_therapy"] = (
         cate["date_cate_start"] - admission_date["date_admission"]
-    ).dt.days.isin([0, 1])  # noqa
-    cate_df = cate.groupby("patient_ID")["cathecholamine_therapy"].any().reset_index()  # noqa
+    ).dt.days.isin([0, 1])
+    cate_df = cate.groupby("patient_ID")["cathecholamine_therapy"].any().reset_index()
     cate_df.replace({True: 1, False: 0}, inplace=True)
 
     patient_info = pd.merge(patient_info, cate_df, on="patient_ID")
@@ -258,7 +254,7 @@ def add_renal_replacement_therapy(
 ) -> pd.DataFrame:
     """
     Add renal replacement therapy information to patient data.
-    # noqa
+
     Parameters:
         data: The input data.
         patient_X (pd.DataFrame): DataFrame containing patient information.
@@ -278,12 +274,12 @@ def add_renal_replacement_therapy(
     rrt["date_rrt_start"] = pd.to_datetime(rrt["icu_rrt_start_date"])
     admission_date["date_admission"] = pd.to_datetime(
         admission_date["had_base_admis_date"]
-    )  # noqa
+    )
 
     rrt["renal_replacement_therapy"] = (
         rrt["date_rrt_start"] - admission_date["date_admission"]
-    ).dt.days.isin([0, 1])  # noqa
-    rrt_df = rrt.groupby("patient_ID")["renal_replacement_therapy"].any().reset_index()  # noqa
+    ).dt.days.isin([0, 1])
+    rrt_df = rrt.groupby("patient_ID")["renal_replacement_therapy"].any().reset_index()
     rrt_df.replace({True: 1, False: 0}, inplace=True)
 
     patient_X = patient_X.merge(rrt_df, on="patient_ID", how="left")
@@ -304,14 +300,14 @@ def add_sepsis(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
     """
     dates = data["patient_data"].loc[
         :, ["h_ev_sepsis_date", "had_base_admis_date", "patient_ID"]
-    ]  # noqa
+    ]
 
     dates["date_sepsis_start"] = pd.to_datetime(dates["h_ev_sepsis_date"])
     dates["date_admission"] = pd.to_datetime(dates["had_base_admis_date"])
 
     dates["sepsis"] = (
         dates["date_sepsis_start"] - dates["date_admission"]
-    ).dt.days.isin([0, 1])  # noqa
+    ).dt.days.isin([0, 1])
     sepsis_df = dates.groupby("patient_ID")["sepsis"].any().reset_index()
     sepsis_df.replace({True: 1, False: 0}, inplace=True)
 
@@ -325,7 +321,7 @@ def add_ventricular_fibrillation(
 ) -> pd.DataFrame:
     """
     Add ventricular fibrillation information to patient data.
-    # noqa
+
     Parameters:
         data: The input data.
         patient_info (pd.DataFrame): DataFrame containing patient information.
@@ -335,15 +331,15 @@ def add_ventricular_fibrillation(
     """
     dates = data["patient_data"].loc[
         :, ["h_ev_vfib_date", "had_base_admis_date", "patient_ID"]
-    ]  # noqa
+    ]
 
     dates["date_vf_start"] = pd.to_datetime(dates["h_ev_vfib_date"])
     dates["date_admission"] = pd.to_datetime(dates["had_base_admis_date"])
 
     dates["ventricular_fibrillation"] = (
         dates["date_vf_start"] - dates["date_admission"]
-    ).dt.days.isin([0, 1])  # noqa
-    vf_df = dates.groupby("patient_ID")["ventricular_fibrillation"].any().reset_index()  # noqa
+    ).dt.days.isin([0, 1])
+    vf_df = dates.groupby("patient_ID")["ventricular_fibrillation"].any().reset_index()
     vf_df.replace({True: 1, False: 0}, inplace=True)
 
     patient_info = pd.merge(patient_info, vf_df, on="patient_ID")
@@ -354,7 +350,7 @@ def add_ventricular_fibrillation(
 def add_stroke(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
     """
     Add stroke information to patient data.
-    # noqa
+
     Parameters:
         data: The input data.
         patient_info (pd.DataFrame): DataFrame containing patient information.
@@ -364,14 +360,14 @@ def add_stroke(data: pd.DataFrame, patient_info: pd.DataFrame) -> pd.DataFrame:
     """
     dates = data["patient_data"].loc[
         :, ["h_ev_stroke_date", "had_base_admis_date", "patient_ID"]
-    ]  # noqa
+    ]
 
     dates["date_stroke_start"] = pd.to_datetime(dates["h_ev_stroke_date"])
     dates["date_admission"] = pd.to_datetime(dates["had_base_admis_date"])
 
     dates["stroke"] = (
         dates["date_stroke_start"] - dates["date_admission"]
-    ).dt.days.isin([0, 1])  # noqa
+    ).dt.days.isin([0, 1])
     stroke_df = dates.groupby("patient_ID")["stroke"].any().reset_index()
     stroke_df.replace({True: 1, False: 0}, inplace=True)
 
@@ -400,7 +396,7 @@ def add_resusitation_24hs(patient_info: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_eICU(
-    data_dir: str, features: str, X_CULPRIT: pd.DataFrame
+    data_dir: Path, features: str, X_CULPRIT: pd.DataFrame
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """
     Load and preprocess eICU data to match the structure of CULPRIT data.

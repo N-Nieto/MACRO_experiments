@@ -1,35 +1,41 @@
 # %% imports
-import joblib
-import shap
-import pickle
-import pandas as pd
-from xgboost import XGBClassifier
 import os
+import pickle
 import sys
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
-sys.path.append(project_root+"/code/")
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
-from lib.data_processing import remove_low_variance_features                                # noqa
-from lib.experiment_definitions import get_features                                         # noqa
+from pathlib import Path
+
+import joblib
+import pandas as pd
+import shap
+from xgboost import XGBClassifier
+
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(project_root + "/code/")
+from lib.data_load_utils import get_data_from_features, load_CULPRIT_data
+from lib.data_processing import remove_low_variance_features
+from lib.experiment_definitions import get_features
+
 # %% Load data
 # Get the estimators
-estimators_dir = project_root+"/output/optuna/big_experiment/"                     # noqa
-estimators = pd.read_csv(estimators_dir + "Best_Admission_model_parameters.csv")            # noqa
+estimators_dir = project_root + "/output/optuna/big_experiment/"
+estimators = pd.read_csv(estimators_dir + "Best_Admission_model_parameters.csv")
 # Get the estimators for the admission
 estimators_admission = estimators[estimators["Model"] == "Admission"]
-# Get only the estimators for the fit with No Shaffled data
-estimators_admission = estimators_admission[estimators_admission["Random State"] == False]          # noqa
+# Get only the estimators for the fit with No Shuffled data
+estimators_admission = estimators_admission[
+    estimators_admission["Random State"] == False
+]
 
-estimators = pd.read_csv(estimators_dir + "Best_Full_model_parameters_v3.csv")            # noqa
+estimators = pd.read_csv(estimators_dir + "Best_Full_model_parameters_v3.csv")
 # Get the estimators for the 24hs model
 estimators_Full = estimators[estimators["Model"] == "Full"]
-# Get only the estimators for the fit with No Shaffled data
-estimators_Full = estimators_Full[estimators_Full["Random State"] == False]                         # noqa
+# Get only the estimators for the fit with No Shuffled data
+estimators_Full = estimators_Full[estimators_Full["Random State"] == False]
 
-data_dir = "/data/CULPRIT/"
-save_dir = project_root+"/final_models/"
+data_dir = Path("/data/CULPRIT/")
+save_dir = project_root + "/final_models/"
 
-# Minimun feature variance
+# Minimum feature variance
 variance_ths = 0.10
 # Get different features depending on the model
 # Get all data
@@ -40,7 +46,7 @@ patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
 
 # Set target
 # endpoint to use
-endpoint_to_use = "fu_ce_death_le30d_yn"    # or "fu_ce_death_le365d_yn"
+endpoint_to_use = "fu_ce_death_le30d_yn"  # or "fu_ce_death_le365d_yn"
 y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
 Y = y.iloc[:, 1].to_numpy()
 
@@ -70,43 +76,49 @@ n_participants, n_features = X_24.shape
 print("24hs features: " + str(n_features))
 
 # Get the median of the estimators for the admission
-median_admission_estimators = round(estimators_admission["Number of Estimators"].median())          # noqa
-median_admission_alpha = estimators_admission["alpha"].median()          # noqa
-median_admission_lambda = estimators_admission["lambda"].median()          # noqa
-median_admission_eta = estimators_admission["eta"].median()          # noqa
-median_admission_max_depth = round(estimators_admission["max_depth"].median())          # noqa
+median_admission_estimators = round(
+    estimators_admission["Number of Estimators"].median()
+)
+median_admission_alpha = estimators_admission["alpha"].median()
+median_admission_lambda = estimators_admission["lambda"].median()
+median_admission_eta = estimators_admission["eta"].median()
+median_admission_max_depth = round(estimators_admission["max_depth"].median())
 
 # Get the median of the estimators for the Full
-median_Full_estimators = round(estimators_Full["Number of Estimators"].median())          # noqa
-median_Full_alpha = estimators_Full["alpha"].median()          # noqa
-median_Full_lambda = estimators_Full["lambda"].median()          # noqa
-median_Full_eta = estimators_Full["eta"].median()          # noqa
-median_Full_max_depth = round(estimators_Full["max_depth"].median())          # noqa
+median_Full_estimators = round(estimators_Full["Number of Estimators"].median())
+median_Full_alpha = estimators_Full["alpha"].median()
+median_Full_lambda = estimators_Full["lambda"].median()
+median_Full_eta = estimators_Full["eta"].median()
+median_Full_max_depth = round(estimators_Full["max_depth"].median())
 
 
 # Create a model with the median of all the estimators
-final_admission_model = XGBClassifier(n_estimators=median_admission_estimators,
-                                      reg_alpha=median_admission_alpha,
-                                      reg_lambda=median_admission_lambda,
-                                      eta=median_admission_eta,
-                                      max_depth=median_admission_max_depth,
-                                      missing=-999,
-                                      eval_metric="auc",
-                                      random_state=23,
-                                      verbosity=0,
-                                      n_jobs=-1)
+final_admission_model = XGBClassifier(
+    n_estimators=median_admission_estimators,
+    reg_alpha=median_admission_alpha,
+    reg_lambda=median_admission_lambda,
+    eta=median_admission_eta,
+    max_depth=median_admission_max_depth,
+    missing=-999,
+    eval_metric="auc",
+    random_state=23,
+    verbosity=0,
+    n_jobs=-1,
+)
 
 # Create a model with the median of all the estimators
-final_24hs_model = XGBClassifier(n_estimators=median_Full_estimators,
-                                 reg_alpha=median_Full_alpha,
-                                 reg_lambda=median_Full_lambda,
-                                 eta=median_Full_eta,
-                                 max_depth=median_Full_max_depth,
-                                 missing=-999,
-                                 eval_metric="auc",
-                                 random_state=23,
-                                 verbosity=0,
-                                 n_jobs=-1)
+final_24hs_model = XGBClassifier(
+    n_estimators=median_Full_estimators,
+    reg_alpha=median_Full_alpha,
+    reg_lambda=median_Full_lambda,
+    eta=median_Full_eta,
+    max_depth=median_Full_max_depth,
+    missing=-999,
+    eval_metric="auc",
+    random_state=23,
+    verbosity=0,
+    n_jobs=-1,
+)
 
 # Fit the models with the Whole dataset
 final_admission_model.fit(X_Admission, Y)
@@ -118,8 +130,8 @@ explainer_admission = shap.Explainer(final_admission_model)
 explainer_full = shap.Explainer(final_24hs_model)
 
 # # Save the models in the web_service direction.
-joblib.dump(final_admission_model, save_dir + 'Admission_model.pkl')
-joblib.dump(final_24hs_model, save_dir + 'Full_model.pkl')
+joblib.dump(final_admission_model, save_dir + "Admission_model.pkl")
+joblib.dump(final_24hs_model, save_dir + "Full_model.pkl")
 
 # %%
 

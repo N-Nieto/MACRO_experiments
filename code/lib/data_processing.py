@@ -1,12 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.feature_selection import VarianceThreshold
-from typing import List
-from pathlib import Path
 
 
 def randomly_replace_with_nan(
-    df: pd.DataFrame, prob: float = 0.1, basic_features: list = []
+    df: pd.DataFrame, prob: float = 0.1, basic_features: list | None = None
 ) -> pd.DataFrame:
     """
     Randomly replaces values in the DataFrame with NaN based
@@ -25,6 +25,8 @@ def randomly_replace_with_nan(
                           randomly replaced with NaN.
     """
     # Generate a random mask based on the specified probability
+    if basic_features is None:
+        basic_features = []
     mask = np.random.rand(*df.shape) < prob
 
     # Set the elements in basic_features to False in the mask to
@@ -75,6 +77,7 @@ def remove_low_variance_features(
 
     return data
 
+
 def naming_for_shap(data_dir: Path, data: pd.DataFrame) -> pd.DataFrame:
     """
     Rename columns of a DataFrame based on a mapping provided in an Excel file.
@@ -120,7 +123,7 @@ def naming_for_shap(data_dir: Path, data: pd.DataFrame) -> pd.DataFrame:
 
 
 def remove_random_features_fix_number(
-    df: pd.DataFrame, features_num: int, basic_features: list = []
+    df: pd.DataFrame, features_num: int, basic_features: list | None = None
 ) -> pd.DataFrame:
     """
     Remove the same number of features from the DataFrame for each row randomly,
@@ -136,6 +139,8 @@ def remove_random_features_fix_number(
         pandas.DataFrame: The DataFrame with the same number of features randomly removed for each row.
     """
     # Determine the available features excluding basic_features
+    if basic_features is None:
+        basic_features = []
     available_features = list(set(df.columns) - set(basic_features))
 
     # Ensure the specified number of features to remove
@@ -158,7 +163,7 @@ def remove_random_features_fix_number(
 
 # Function to round each column of X with different number of digits
 def round_columns_with_different_digits(
-    X: np.ndarray, rounded_digits: List[int]
+    X: np.ndarray, rounded_digits: list[int]
 ) -> np.ndarray:
     """
     Round each column of a 2D array with a different number of decimal places.
@@ -199,7 +204,7 @@ def define_shock_group(row: pd.Series) -> str:
     str
         The shock group classification ('C', 'D', 'E', or 'NO').
     """
-    if row["lactate_max"] > 2 and row["doubled_creat"] == 1 or row["any_pressor"] >= 1:  # noqa
+    if row["lactate_max"] > 2 and row["doubled_creat"] == 1 or row["any_pressor"] >= 1:
         SCAI = "C"
     elif row["total_pressors"] > row["total_pressors_first_hour"]:
         SCAI = "D"
