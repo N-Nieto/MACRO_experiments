@@ -2,7 +2,6 @@
 import os
 import pickle
 import sys
-from pathlib import Path
 
 import joblib
 import pandas as pd
@@ -14,6 +13,7 @@ sys.path.append(project_root + "/code/")
 from lib.data_load_utils import get_data_from_features, load_CULPRIT_data
 from lib.data_processing import remove_low_variance_features
 from lib.experiment_definitions import get_features
+from lib.paths import CULPRIT_DIR
 
 # %% Load data
 # Get the estimators
@@ -32,7 +32,7 @@ estimators_Full = estimators[estimators["Model"] == "Full"]
 # Get only the estimators for the fit with No Shuffled data
 estimators_Full = estimators_Full[estimators_Full["Random State"] == False]
 
-data_dir = Path("/data/CULPRIT/")
+data_dir = CULPRIT_DIR  # see lib/paths.py
 save_dir = project_root + "/final_models/"
 
 # Minimum feature variance
