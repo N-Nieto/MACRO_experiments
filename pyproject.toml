@@ -26,6 +26,7 @@ dependencies = [
 dev = [
     "pytest>=9.2.0",
     "ipykernel>=7.4.0",
+    "pandas-stubs>=3.1.0.261029",
 ]
 
 [tool.uv]

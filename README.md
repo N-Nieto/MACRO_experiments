@@ -39,6 +39,14 @@ cd code/Admission_model && uv run python Admission_model_experiment.py
 To update all packages to their latest releases: `uv lock --upgrade && uv sync`.
 
 
+## Data location
+
+All scripts read the data from the folders defined in `code/lib/paths.py`:
+`<parent of CULPRIT_project>/data/CULPRIT` (CULPRIT-SHOCK export and `Shorten_table.xlsx`) and
+`<parent of CULPRIT_project>/data/eicu-collaborative-research-database-2.0` (raw eICU tables;
+`preprocessed_MACRO/` is created by `code/eICU_extract_CS_patients.py`).
+To use another folder, set `MACRO_DATA_DIR`, e.g. `MACRO_DATA_DIR=/path/to/data uv run python ...`.
+
 ## Data access
 ### CULPRIT-SCHOCK dataset
 The dataset is not publicly available but access can be granted upon request. Please contact the corresponding author [n.nieto@fz-juelich.de]
