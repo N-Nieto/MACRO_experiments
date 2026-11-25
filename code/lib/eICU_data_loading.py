@@ -315,8 +315,8 @@ def load_eicu_dyslipidemia(
 
     A patient is flagged when any lipid value measured BEFORE ICU admission
     meets one criterion: triglycerides > 150 mg/dL, HDL < 40 mg/dL or
-    LDL > 190 mg/dL. Repeated measurements of the same analyse are averaged.
-    An analyse that was never measured is NaN and never triggers a criterion.
+    LDL > 190 mg/dL. Repeated measurements of the same analyte are averaged.
+    An analyte that was never measured is NaN and never triggers a criterion.
     Patients without any pre-admission lipid value are not returned (the caller
     decides how to fill them).
 
@@ -344,10 +344,10 @@ def load_eicu_dyslipidemia(
     lab = lab[lab["labname"].isin(features_fat)].copy()
     lab["labresult"] = pd.to_numeric(lab["labresult"], errors="coerce")
 
-    # One column per analyse (mean of repeated values), NaN if never measured.
+    # One column per analyte (mean of repeated values), NaN if never measured.
     # NOTE: the previous implementation averaged one-hot * value columns, which
-    # mixed zeros from the other analyse into each mean, turned unmeasured
-    # analyse into 0 (so "HDL < 40" fired whenever HDL was missing) and divided
+    # mixed zeros from the other analytes into each mean, turned unmeasured
+    # analytes into 0 (so "HDL < 40" fired whenever HDL was missing) and divided
     # triglycerides by the cholesterol factor (38.67 instead of 88.57).
     lipids = lab.pivot_table(
         index="patientunitstayid",
@@ -356,7 +356,7 @@ def load_eicu_dyslipidemia(
         aggfunc="mean",
     ).reindex(columns=features_fat)
 
-    # Comparisons with NaN are False, so missing analyse never trigger
+    # Comparisons with NaN are False, so missing analytes never trigger
     dyslipidemia = (
         (lipids["triglycerides"] > DYSLIPIDEMIA_CUTOFFS_MG_DL["triglycerides"])
         | (lipids["HDL"] < DYSLIPIDEMIA_CUTOFFS_MG_DL["HDL"])
