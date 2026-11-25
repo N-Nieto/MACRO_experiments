@@ -1,24 +1,33 @@
 
 # %%
-import shap
 import os
 import sys
-from sklearn.model_selection import StratifiedKFold
+from pathlib import Path
+
 import optuna
+import shap
+from sklearn.model_selection import StratifiedKFold
+
 # Append project path for using the functions in lib
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))             
 sys.path.append(project_root+"/code/")
 
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features, load_eICU    # noqa
-from lib.experiment_definitions import get_features                                     # noqa
-from lib.data_processing import remove_low_variance_features, naming_for_shap           # noqa
-from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df          # noqa
-
+from lib.data_load_utils import get_data_from_features, load_CULPRIT_data, load_eICU
+from lib.data_processing import naming_for_shap, remove_low_variance_features
+from lib.experiment_definitions import get_features
+from lib.ml_utils import compute_results, get_inner_loop_optuna, results_to_df
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # %%
 data_dir = "/data/CULPRIT/"
+# eICU data root (folder containing eicu-collaborative-research-database-2.0),
+# same location as in eICU_extract_CS_patients.py
+eicu_data_dir = Path(project_root).parents[1] / "data"
+# eICU label, one of lib.eICU_processing.EICU_OUTCOMES:
+# "in_hospital_death" (submitted manuscript), "in_hospital_death_30d_icu",
+# "in_hospital_death_30d_hospital", "icu_death"
+eicu_outcome = "in_hospital_death"
 
 # Minimun feature variance
 variance_ths = 0.10
@@ -65,7 +74,12 @@ X = get_data_from_features(patient_info, feature_24h)
 
 # Remove low variance features
 X = remove_low_variance_features(X, variance_ths)
+
+# Load eICU with the CULPRIT column names, THEN rename both for SHAP
+# (aligning after renaming left every eICU feature NaN)
+X_eicu, Y_test_eicu = load_eICU(eicu_data_dir, "Admission", X, outcome=eicu_outcome)
 X = naming_for_shap(data_dir, X)
+X_eicu = naming_for_shap(data_dir, X_eicu)
 
 # Final data shape
 n_participants, n_features = X.shape
@@ -73,8 +87,6 @@ n_participants, n_features = X.shape
 # Show the feature distribution
 print("Admission features: " + str(n_features))
 
-X_eicu, Y_test_eicu = load_eICU(features="Admission", exclude_smokers=False,
-                                X_CULPRIT=X)
 
 # %%
 kf_inner = StratifiedKFold(n_splits=inner_n_splits,
@@ -106,7 +118,6 @@ results_admission = compute_results(1, "Admission Test (eICU)",
 results_admission = results_to_df(results_admission)
 
 # %%
-results_admission
 # %%
 explainer = shap.TreeExplainer(admission_model["model"], X)
 shap_values = explainer(X_eicu)
