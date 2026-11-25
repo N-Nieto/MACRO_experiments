@@ -197,9 +197,11 @@ def create_admission_lactate(patient_info: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame with a new column 'admission_lactate'.
     """
+    # Pre-PCI lactate (the admission value); post-PCI only if pre-PCI is missing.
+    # (The first submission used post-PCI first.)
     patient_info["admission_lactate"] = patient_info[
-        "icu_lab_lactpopci_x"
-    ].combine_first(patient_info["icu_lab_lactprepci_x"])
+        "icu_lab_lactprepci_x"
+    ].combine_first(patient_info["icu_lab_lactpopci_x"])
     return patient_info
 
 
@@ -413,6 +415,7 @@ def load_eICU(
     outcome: str = "in_hospital_death",
     exclude_early_deaths: bool | None = None,
     match_pbnp_to_culprit: bool = False,
+    tni_as_tnt_proxy: bool = True,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """
     Load the preprocessed eICU cohort (from eICU_extract_CS_patients.py) and
@@ -440,6 +443,11 @@ def load_eICU(
         Quantile-map the eICU NT-proBNP proxy onto the CULPRIT-SHOCK NT-proBNP
         distribution (sensitivity analysis; removes any true difference in
         level between the cohorts). Default False.
+    tni_as_tnt_proxy : bool
+        Full model only. eICU rarely reports troponin T (CULPRIT-SHOCK) but
+        often troponin I. For patients without troponin T, troponin I is
+        quantile-mapped onto the CULPRIT-SHOCK troponin-T distribution (rank
+        preserving; the two assays have no common scale). Default True.
 
     Returns
     -------
@@ -472,8 +480,16 @@ def load_eICU(
         + (", early deaths excluded" if exclude_early_deaths else "")
     )
 
+    X_eicu = X_eicu.loc[keep]
+    if tni_as_tnt_proxy and "eicu_troponin_I" in X_eicu and "tnt" in X_CULPRIT and "tnt" in X_eicu:
+        proxy = quantile_match(X_eicu["eicu_troponin_I"], X_CULPRIT["tnt"])
+        fill = X_eicu["tnt"].isna() & proxy.notna()
+        X_eicu.loc[fill, "tnt"] = proxy[fill]
+        print(f"eICU troponin T: {int(X_eicu['tnt'].notna().sum() - fill.sum())} measured, "
+              f"{int(fill.sum())} from troponin I (quantile-mapped)")
+
     # Align eICU feature columns with the CULPRIT-SHOCK training columns
-    X_eicu = X_eicu.loc[keep].reindex(columns=X_CULPRIT.columns)
+    X_eicu = X_eicu.reindex(columns=X_CULPRIT.columns)
 
     if match_pbnp_to_culprit and "pbnp" in X_eicu and "pbnp" in X_CULPRIT:
         X_eicu["pbnp"] = quantile_match(X_eicu["pbnp"], X_CULPRIT["pbnp"])

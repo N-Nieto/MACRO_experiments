@@ -2,173 +2,8 @@ import os
 from collections.abc import Iterable
 
 import pandas as pd
-from lib.eICU_processing import (
-    different_lactate_timing,
-    group_features,
-    harmonize_eicu_labs,
-    process_individual_features,
-)
-
-
-def load_eicu_history(root_dir: str) -> pd.DataFrame:
-    """
-    Load and preprocess patient past medicalhistory data
-    from the eICU dataset.
-
-    Args:
-        root_dir (str): The root directory of the eICU dataset.
-
-    Returns:
-        pd.DataFrame: Processed patient past medical history data.
-    """
-
-    # Columns to load from the pastHistory.csv.gz file
-    usecols = ["patientunitstayid", "pasthistoryvalue"]
-
-    file_dir = os.path.join(root_dir, "pastHistory.csv.gz")
-    # Load past medical history data
-    past_history = pd.read_csv(file_dir, usecols=usecols)
-
-    # List of features to filter
-    features_history = [
-        "atrial fibrillation - chronic",
-        "atrial fibrillation - intermittent",
-        "CABG - date unknown",
-        "CABG - remote",
-        "CABG - within 2 years",
-        "CABG - within 5 years",
-        "CABG - within 6 months",
-        "hypertension requiring treatment",
-        "insulin dependent diabetes",
-        "MI - date unknown",
-        "MI - remote",
-        "MI - within 2 years",
-        "MI - within 5 years",
-        "MI - within 6 months",
-        "peripheral vascular disease",
-        "procedural coronary intervention - date unknown",
-        "procedural coronary intervention - remote",
-        "procedural coronary intervention - within 2 years",
-        "procedural coronary intervention - within 5 years",
-        "procedural coronary intervention - within 6 months",
-        "sick sinus syndrome",
-    ]
-
-    # Filter rows based on useful information
-    past_history = past_history[past_history["pasthistoryvalue"].isin(features_history)]
-
-    # Create columns for each feature, indicating its presence
-    past_history = process_individual_features(
-        past_history, features_history, "pasthistoryvalue"
-    )
-
-    # Group different features into categories
-    features_group = {
-        "Known coronary artery disease": [
-            "MI - date unknown",
-            "MI - remote",
-            "MI - within 2 years",
-            "MI - within 5 years",
-            "MI - within 6 months",
-            "procedural coronary intervention - date unknown",
-            "procedural coronary intervention - remote",
-            "procedural coronary intervention - within 2 years",
-            "procedural coronary intervention - within 5 years",
-            "procedural coronary intervention - within 6 months",
-            "CABG - date unknown",
-            "CABG - remote",
-            "CABG - within 2 years",
-            "CABG - within 5 years",
-            "CABG - within 6 months",
-        ],
-        "Atrial fibrillation": [
-            "atrial fibrillation - chronic",
-            "atrial fibrillation - intermittent",
-        ],
-    }
-
-    # Create new columns for each feature group
-    past_history = group_features(past_history, features_group)
-
-    # Select final features
-    selected_features = [
-        "patientunitstayid",
-        "Atrial fibrillation",
-        "hypertension requiring treatment",
-        "insulin dependent diabetes",
-        "peripheral vascular disease",
-        "sick sinus syndrome",
-        "Known coronary artery disease",
-    ]
-
-    # Select and group by 'patientunitstayid'
-    # and take the maximum value for each group
-    past_history = past_history.loc[:, selected_features]
-    past_history = past_history.groupby("patientunitstayid").max().reset_index()
-
-    # Change sick sinus syndrom to match culprit
-    past_history["sick sinus syndrome"] = past_history["sick sinus syndrome"].replace(
-        {0: 1, 1: 0}
-    )
-    # Check for uniqueness of 'patientunitstayid'
-    assert past_history["patientunitstayid"].nunique() == len(
-        past_history["patientunitstayid"]
-    )
-
-    return past_history
-
-
-def eICU_load_physical_exam(root_dir):
-
-    usecols = ["patientunitstayid", "physicalexamvalue", "physicalexamoffset"]
-
-    file_dir = os.path.join(root_dir, "physicalExam.csv.gz")
-    physicalExam = pd.read_csv(file_dir, usecols=usecols)
-    # Use only information obtained in the first hour
-    physicalExam = physicalExam[physicalExam["physicalexamoffset"] <= 60]
-
-    # Filter relevant features
-    features_exam = [
-        "patientunitstayid",
-        "delusional",
-        "extremities cold/dusky",
-        "extremities cool",
-    ]
-    physicalExam = physicalExam[physicalExam["physicalexamvalue"].isin(features_exam)]
-
-    # Pass from the diagnosis to a columne
-    features_exam.remove("patientunitstayid")
-
-    physicalExam = process_individual_features(
-        physicalExam, features_exam, "physicalexamvalue"
-    )
-
-    physicalExam = physicalExam.drop("physicalexamvalue", axis=1)
-    physicalExam = physicalExam.drop("physicalexamoffset", axis=1)
-
-    # Group different features
-    features_group = {
-        "extremities cold": ["extremities cold/dusky", "extremities cool"]
-    }
-
-    # Iterate through features_group and create a new column for each group
-    for group, features in features_group.items():
-        # Add a new column where 1 indicates any of the features
-        # in the group were presented and 0 otherwise
-        physicalExam[group] = (physicalExam[features].sum(axis=1) > 0).astype(int)
-        # Remove the individual features that are part of the group
-        physicalExam = physicalExam.drop(features, axis=1)
-
-    # Group by 'patientunitstayid' and take the maximum value for each group
-    physicalExam = physicalExam.groupby("patientunitstayid").max().reset_index()
-
-    # Check for uniqueness of 'patientunitstayid'
-    assert (
-        physicalExam["patientunitstayid"].nunique()
-        == physicalExam["patientunitstayid"].__len__()
-    )
-
-    return physicalExam
+from lib.eICU_features import read_table
+from lib.eICU_processing import harmonize_eicu_labs
 
 
 def load_eicu_diagnosis(root_dir: str) -> pd.DataFrame:
@@ -223,6 +58,10 @@ def load_eicu_patient_information(root_dir: str) -> pd.DataFrame:
             "hospitaldischargeoffset",
             "unitdischargeoffset",
             "unitdischargestatus",
+            # Time of day of the ICU admission (calendar days 0-1, see
+            # lib.eICU_features) and APACHE admission diagnosis
+            "unitadmittime24",
+            "apacheadmissiondx",
         ],
     )
 
@@ -239,67 +78,6 @@ def load_eicu_patient_information(root_dir: str) -> pd.DataFrame:
     assert patients["patientunitstayid"].nunique() == len(patients["patientunitstayid"])
 
     return patients
-
-
-def load_eicu_defibrillation(root_dir: str) -> pd.DataFrame:
-    """
-    Load and preprocess defibrillation treatment data from the eICU dataset.
-
-    Args:
-        root_dir (str): The root directory of the eICU dataset.
-
-    Returns:
-        pd.DataFrame: Processed defibrillation treatment data.
-    """
-    # Load treatment data from file
-    file_dir = os.path.join(root_dir, "treatment.csv.gz")
-    treatment = pd.read_csv(
-        file_dir, usecols=["patientunitstayid", "treatmentoffset", "treatmentstring"]
-    )
-
-    # Keep only the information of the previous 24 hours
-    treatment = treatment[
-        (treatment["treatmentoffset"] < 60) & (treatment["treatmentoffset"] > -1440)
-    ]
-
-    # Define feature names
-    feature_names = [
-        "cardiovascular|arrhythmias|cardiac defibrillation",
-        "cardiovascular|non-operative procedures|defibrillation",
-    ]
-
-    # Process individual features
-    for feature in feature_names:
-        treatment[feature] = (treatment["treatmentstring"] == feature).astype(int)
-
-    # Group features
-    features_group = {
-        "Resuscitation within 24hs": [
-            "cardiovascular|arrhythmias|cardiac defibrillation",
-            "cardiovascular|non-operative procedures|defibrillation",
-        ]
-    }
-
-    for group, features in features_group.items():
-        # Add a new column where 1 indicates any of the features
-        # in the group were presented and 0 otherwise
-        treatment[group] = (treatment[features].sum(axis=1) > 0).astype(int)
-        # Remove the individual features that are part of the group
-        treatment = treatment.drop(features, axis=1)
-
-    # Select relevant features
-    selected_features = ["patientunitstayid", "Resuscitation within 24hs"]
-    treatment = treatment[selected_features]
-
-    # Group by 'patientunitstayid' and take the maximum value for each group
-    treatment = treatment.groupby("patientunitstayid").max().reset_index()
-
-    # Check for uniqueness of 'patientunitstayid'
-    assert treatment["patientunitstayid"].nunique() == len(
-        treatment["patientunitstayid"]
-    )
-
-    return treatment
 
 
 # Dyslipidemia cut-offs in mg/dL (the unit used by eICU for lipid labs).
@@ -332,20 +110,13 @@ def load_eicu_dyslipidemia(
     Returns:
         pd.DataFrame: Columns ["patientunitstayid", "dyslipidemia"] (0/1).
     """
-    # Get the needed columns for faster processing
-    usecols = ["patientunitstayid", "labresultoffset", "labname", "labresult"]
-    # Load the lab data
-    lab = pd.read_csv(os.path.join(root_dir, "lab.csv.gz"), usecols=usecols)
-
-    # Keep only the selected patients for faster processing
-    lab = lab[lab["patientunitstayid"].isin(selected_patients)]
-
-    # Keep only values measured before ICU admission (offset in minutes)
-    lab = lab[lab["labresultoffset"] < 0]
-
-    # Keep only lipid labs
     features_fat = list(DYSLIPIDEMIA_CUTOFFS_MG_DL)
-    lab = lab[lab["labname"].isin(features_fat)].copy()
+    # Lipid labs of the selected patients measured before ICU admission
+    lab = read_table(
+        root_dir, "lab", ["patientunitstayid", "labresultoffset", "labname", "labresult"],
+        selected_patients,
+        row_filter=lambda c: (c["labresultoffset"] < 0) & c["labname"].isin(features_fat),
+    )
     lab["labresult"] = pd.to_numeric(lab["labresult"], errors="coerce")
 
     # One column per analyte (mean of repeated values), NaN if never measured.
@@ -403,203 +174,57 @@ def load_eicu_mechanical_ventilation(root_dir: str) -> pd.DataFrame:
     return vent
 
 
-def load_eicu_st_segmentation(root_dir: str) -> pd.DataFrame:
+# Lab names used for the Full model ("bedside glucose" fills missing "glucose";
+# "troponin - I" is kept for the troponin-T proxy, see lib.data_load_utils.load_eICU)
+EICU_LAB_NAMES = [
+    "lactate", "BNP", "CPK", "troponin - T", "troponin - I", "creatinine",
+    "WBC x 1000", "Hct", "CRP", "PT - INR", "glucose", "bedside glucose", "ALT (SGPT)",
+]
+# Labs from 24 h before to 24 h after ICU admission
+LAB_WINDOW = (-1440, 1440)
+# Lactate time points (offset in minutes, (lo, hi]; the admission value also
+# includes lo). The admission lactate includes the first hour in the ICU:
+# eICU patients usually reach the ICU after the PCI.
+LACTATE_BINS = {
+    "admission_lactate": (-1440, 60),
+    "icu_lab_lact8hpci_x": (60, 480),
+    "icu_lab_lact16hpci_x": (480, 960),
+    "icu_lab_lact24hpci_x": (960, 1440),
+}
+
+
+def load_eicu_24hs_features(
+    root_dir: str, selected_patients: pd.Series | Iterable[int] | None = None
+) -> pd.DataFrame:
     """
-    Load and preprocess ST segment elevation data from the eICU dataset.
+    Mean value of each Full-model lab per patient (LAB_WINDOW), lactate per
+    time point (LACTATE_BINS), converted to CULPRIT-SHOCK units. BNP stays BNP
+    (pg/mL), see lib.eICU_processing.eicu_bnp_to_ntprobnp.
 
-    Args:
-        root_dir (str): The root directory of the eICU dataset.
-
-    Returns:
-        pd.DataFrame: Processed ST segment elevation data.
+    Returns one row per patient (indexed by patientunitstayid) with eICU lab
+    names as columns, the lactate columns with CULPRIT-SHOCK names, "glucose"
+    filled with "bedside glucose" when no laboratory glucose was measured, and
+    "eicu_troponin_I".
     """
-    # Get the needed columns for faster processing
-    usecols = ["patientunitstayid", "diagnosisstring", "diagnosisoffset"]
-    # Load the diagnosis data
-    diagnosis = pd.read_csv(os.path.join(root_dir, "diagnosis.csv.gz"), usecols=usecols)
-
-    # Filter for patients diagnosed with "with ST elevation"
-    diagnosis = diagnosis[
-        diagnosis["diagnosisstring"].str.contains("with ST elevation")
-    ]
-
-    # Keep only the patients' diagnoses up to 10 minutes after admission
-    diagnosis["ST_elevation"] = diagnosis["diagnosisoffset"] < 60
-    diagnosis["ST_elevation"] = diagnosis["ST_elevation"].astype(int)
-
-    # Group the patients
-    diagnosis = diagnosis.groupby("patientunitstayid").max().reset_index()
-
-    # Keep only the important features
-    ST_elevation = diagnosis.loc[:, ["patientunitstayid", "ST_elevation"]]
-
-    return ST_elevation
-
-
-def load_eicu_24hs_features(root_dir: str) -> pd.DataFrame:
-    """
-    Load and preprocess lab data for 24-hour features from the eICU dataset.
-    Units are converted to CULPRIT-SHOCK units; BNP stays BNP (pg/mL), see
-    lib.eICU_processing.eicu_bnp_to_ntprobnp.
-
-    Args:
-        root_dir (str): The root directory of the eICU dataset.
-
-    Returns:
-        pd.DataFrame: Processed lab data for 24-hour features.
-    """
-    # Get the needed columns for faster processing
-    usecols = ["patientunitstayid", "labresultoffset", "labname", "labresult"]
-    # Load the lab data
-    lab = pd.read_csv(os.path.join(root_dir, "lab.csv.gz"), usecols=usecols)
-
-    # Define features to include
-    features_lab = [
-        "lactate",
-        "BNP",
-        "CPK",
-        "troponin - T",
-        "creatinine",
-        "WBC x 1000",
-        "Hct",
-        "CRP",
-        "PT - INR",
-        "glucose",
-        "ALT (SGPT)",
-        "-monos",
-    ]
-
-    # Filter lab data for selected features
-    lab = lab[lab["labname"].isin(features_lab)]
-
-    # Keep only lab results within the first 24 hours and one day before
-    lab = lab[lab["labresultoffset"] <= 1440]
-    lab = lab[lab["labresultoffset"] >= -1440]
-
-    # Create binary columns indicating the presence of each feature
-    for feature in features_lab:
-        lab[feature] = (lab["labname"] == feature).astype(int)
-
-    # Multiply each lab result by its corresponding binary column
-    for col in features_lab:
-        lab[col] = lab[col] * lab["labresult"]
-
-    # Apply function to create new labname column
-    lab["labname"] = lab.apply(different_lactate_timing, axis=1)
-
-    # Group by patientunitstayid and labname, then calculate mean labresult
-    lab = (
-        lab.groupby(["patientunitstayid", "labname"])["labresult"].mean().reset_index()
+    lab = read_table(
+        root_dir, "lab", ["patientunitstayid", "labresultoffset", "labname", "labresult"],
+        selected_patients,
+        row_filter=lambda c: c["labname"].isin(EICU_LAB_NAMES)
+        & c["labresultoffset"].between(*LAB_WINDOW),
     )
-
-    # Pivot the table to have labname as columns
-    lab = lab.pivot(
-        index="patientunitstayid", columns="labname", values="labresult"
-    ).reset_index()
-
+    lab["labresult"] = pd.to_numeric(lab["labresult"], errors="coerce")
+    name = lab["labname"].copy()
+    offset = lab["labresultoffset"]
+    is_lactate = name == "lactate"
+    for column, (lo, hi) in LACTATE_BINS.items():
+        lower = offset >= lo if column == "admission_lactate" else offset > lo
+        name[is_lactate & lower & (offset <= hi)] = column
+    wide = lab.assign(labname=name).pivot_table(
+        index="patientunitstayid", columns="labname", values="labresult", aggfunc="mean"
+    )
+    wide = wide.reindex(columns=[c for c in EICU_LAB_NAMES if c != "lactate"] + list(LACTATE_BINS))
+    wide["glucose"] = wide["glucose"].fillna(wide["bedside glucose"])
+    wide = wide.drop(columns="bedside glucose").rename(columns={"troponin - I": "eicu_troponin_I"})
+    wide.columns.name = None
     # Convert to the CULPRIT-SHOCK units
-    lab = harmonize_eicu_labs(lab)
-
-    return lab
-
-
-def load_eicu_mechanical_support(root_dir: str) -> pd.DataFrame:
-    """
-    Load eICU data related to mechanical support.
-
-    Args:
-        root_dir (str): Root directory containing eICU data.
-
-    Returns:
-        pd.DataFrame: DataFrame containing mechanical support data.
-    """
-    # Define columns to use
-    usecols = ["patientunitstayid", "treatmentoffset", "treatmentstring"]
-
-    # Load treatment data
-    treatment = pd.read_csv(os.path.join(root_dir, "treatment.csv.gz"), usecols=usecols)
-
-    # Keep treatments within the first 24 hours (1440 minutes)
-    treatment = treatment[treatment["treatmentoffset"] < 1440]
-
-    # Define keywords to identify mechanical support
-    keywords = ["intraaortic balloon pump"]
-
-    # Function to check if any keyword is present in the treatment string
-    def check_IABP(treatment_str):
-        for keyword in keywords:
-            if keyword in treatment_str:
-                return True
-        return False
-
-    # Function to check if any keyword is present in the treatment string
-    def check_IABP_removal(treatment_str):
-        for keyword in keywords:
-            if keyword in treatment_str:
-                return False
-        return True
-
-    # Filter the dataframe based on keywords
-    treatment = treatment[treatment["treatmentstring"].apply(check_IABP)]
-
-    # Define keywords to identify mechanical support
-    keywords = ["removal"]
-    # Filter the dataframe based on keywords
-    treatment = treatment[treatment["treatmentstring"].apply(check_IABP_removal)]
-
-    # Create a new column indicating mechanical support presence
-    treatment["hpe_proc_mechs_yn"] = 1
-
-    # Select relevant columns
-    treatment = treatment.loc[:, ["patientunitstayid", "hpe_proc_mechs_yn"]]
-
-    # Group by patientunitstayid and keep only the maximum value
-    treatment = treatment.groupby("patientunitstayid").max().reset_index()
-
-    # Assert uniqueness of patientunitstayid
-    assert treatment["patientunitstayid"].nunique() == len(
-        treatment["patientunitstayid"]
-    )
-
-    return treatment
-
-
-def load_eicu_diabetes_mellitus(root_dir: str) -> pd.DataFrame:
-    """
-    Load eICU diagnosis data related to diabetes mellitus.
-
-    Args:
-        root_dir (str): Root directory containing eICU data.
-
-    Returns:
-        pd.DataFrame: DataFrame containing diabetes mellitus patients' data.
-    """
-    # Construct file path for diagnosis data
-    file_dir = os.path.join(root_dir, "diagnosis.csv.gz")
-
-    # Load diagnosis data with relevant columns
-    diagnosis = pd.read_csv(
-        file_dir, usecols=["patientunitstayid", "icd9code", "diagnosisoffset"]
-    )
-
-    # Keep only the diagnosis before the admission time
-    diagnosis = diagnosis[diagnosis["diagnosisoffset"] < 0]
-
-    # Drop rows with missing icd9code values
-    diagnosis = diagnosis.dropna(subset=["icd9code"])
-
-    # Extract primary icd9code from comma-separated list
-    diagnosis["icd9code"] = diagnosis["icd9code"].apply(lambda x: x.split(",")[0])
-
-    # Filter patients diagnosed with diabetes mellitus (ICD-9 code: 250.00)
-    diabetes_mellitus = diagnosis[diagnosis["icd9code"] == "250.00"]
-
-    # Drop unnecessary columns
-    diabetes_mellitus = diabetes_mellitus.drop(columns=["diagnosisoffset", "icd9code"])
-
-    # Group by patientunitstayid and keep only the maximum value
-    diabetes_mellitus = (
-        diabetes_mellitus.groupby("patientunitstayid").max().reset_index()
-    )
-
-    return diabetes_mellitus
+    return harmonize_eicu_labs(wide)
