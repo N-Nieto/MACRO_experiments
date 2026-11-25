@@ -1,172 +1,118 @@
 # %%
-import pandas as pd
-import random
-import os
+"""
+Conventional risk scores on CULPRIT-SHOCK: SAPS II, IABP-SHOCK II, CLIP and
+CardShock.
+
+Each score is the single input of a logistic regression that predicts 30-day
+mortality. The scores are evaluated with the same outer cross-validation
+folds as the Full model (same cohort: patients alive after 24 h, same random
+state), using in every fold the patients who have the score. Because the
+folds are shared, the out-of-fold predictions can be compared with the Full
+model patient by patient (analysis/bootstrap_ci.py).
+
+Outputs (output/scores/):
+    <score>.csv                metrics per fold (threshold 0.5); rows with
+                               "Random State" True are the label-permutation
+                               control (training labels shuffled)
+    <score>_predictions.csv    out-of-fold predictions (one column per fold)
+    <score>_y_true.csv, <score>_patient_ID.csv  (same layout)
+"""
 import sys
+from pathlib import Path
+
+import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold
 
-# Append project path for using the functions in lib
-project_root = os.path.dirname(os.path.dirname(os.path.dirname((__file__))))               # noqa
-sys.path.append(project_root+"/code/")
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from lib.data_load_utils import load_CULPRIT_data
+from lib.experiment_config import (
+    ENDPOINT,
+    OUT_N_REPETITIONS,
+    OUT_N_SPLITS,
+    RANDOM_STATE,
+    model_cohort,
+)
+from lib.ml_utils import compute_results, results_to_df, save_fold_predictions
+from lib.paths import CULPRIT_DIR, OUTPUT_DIR
+from lib.scores import cardshock_score
+from lib.utils import ensure_dir
 
-from lib.data_load_utils import load_CULPRIT_data, get_data_from_features                   # noqa
-from lib.experiment_definitions import get_features                                         # noqa
-from lib.ml_utils import compute_results                                                    # noqa
-from lib.paths import CULPRIT_DIR  # noqa
 # %%
-data_dir = CULPRIT_DIR  # see lib/paths.py
-save_dir = project_root+"/output/"
-# Minimun feature variance
-variance_ths = 0.10
-# Set random state
-random_state = 23
-random_permutation = [False, True]
-random_permutation_number = 1
+save_dir = OUTPUT_DIR / "scores"
+ensure_dir(save_dir)
 
-# Cross validation parameters
-out_n_splits = 10
-out_n_repetitions = 10
-# Inner CV
-inner_n_splits = 3
-
-# Model parameters
-# Model Threshold
+# Score name -> column of load_CULPRIT_data()
+SCORES = {
+    "SAPS": "icu_the_saps2score_num_x",  # SAPS II, as recorded in CULPRIT-SHOCK
+    "IABP": "had_dem_iabpscore_c",  # IABP-SHOCK II, as recorded
+    "CLIP": "CLIP_Score",  # computed in load_CULPRIT_data
+    "CardShock": "CardShock_Score",  # computed below (lib/scores.py)
+}
+# Label-permutation control: number of refits with shuffled training labels
+n_label_permutations = 1
+# Decision threshold for the threshold-dependent metrics
 thr = 0.5
 
-# Data load and pre-processing
-# endpoint to use
-endpoint_to_use = "fu_ce_death_le30d_yn"    # or "fu_ce_death_le365d_yn"
+# %% Data
+patient_info = load_CULPRIT_data(CULPRIT_DIR)
+patient_info["CardShock_Score"] = cardshock_score(patient_info)
 
-# Get different features depending on the model
-# Get all data
-patient_info = load_CULPRIT_data(data_dir)
+# Same cohort and order as the Full model -> same outer folds
+cohort = model_cohort(patient_info, "Full")
+Y = cohort[ENDPOINT].to_numpy().astype(int)
+patient_ids = cohort["patient_ID"].to_numpy()
+for name, column in SCORES.items():
+    print(f"{name}: available for {cohort[column].notna().sum()} of {len(cohort)} patients")
 
-# Set target
-y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
-Y = y.iloc[:, 1].to_numpy()
+# %% Cross-validation
+kf_out = RepeatedStratifiedKFold(
+    n_splits=OUT_N_SPLITS, n_repeats=OUT_N_REPETITIONS, random_state=RANDOM_STATE
+)
+rng = np.random.default_rng(RANDOM_STATE)
 
-# %%
-# Removing patients that died in the first 24hs
-patient_info = patient_info[patient_info["fu_ce_Death_d"] != 0]
+results = {name: [] for name in SCORES}
+oof = {name: {"pred": [], "y": [], "id": []} for name in SCORES}
 
-# Set target
-y = patient_info.loc[:, ["patient_ID", endpoint_to_use]]
-Y_loop = y.iloc[:, 1].to_numpy()
+for i_fold, (train_index, test_index) in enumerate(kf_out.split(cohort, Y)):
+    print("FOLD: " + str(i_fold))
+    for name, column in SCORES.items():
+        x = cohort[column].to_numpy(dtype=float)
+        # Patients of this fold with the score available
+        train = train_index[~np.isnan(x[train_index])]
+        test = test_index[~np.isnan(x[test_index])]
 
-# Extract all the IABP_SCORE available features
-exp_name = "IABP_SCORE"
-features_IACP = get_features(exp_name)
-X_IABP_SCORE = get_data_from_features(patient_info, features_IACP)
+        clf = LogisticRegression().fit(x[train, None], Y[train])
+        prob_test = clf.predict_proba(x[test, None])[:, 1]
+        prob_train = clf.predict_proba(x[train, None])[:, 1]
+        oof[name]["pred"].append(prob_test)
+        oof[name]["y"].append(Y[test])
+        oof[name]["id"].append(patient_ids[test])
 
-# Extract all the SAPS_SCORE available features
-exp_name = "SAPS_SCORE"
-features_SAPS = get_features(exp_name)
-X_SAPS_SCORE = get_data_from_features(patient_info, features_SAPS)
+        if len(np.unique(Y[test])) < 2:
+            print(f"  {name}: only one class in test fold {i_fold}, metrics skipped")
+            continue
+        results[name] = compute_results(
+            i_fold, f"{name}_Score_test", prob_test, Y[test], results[name], ths_range=thr
+        )
+        results[name] = compute_results(
+            i_fold, f"{name}_Score_train", prob_train, Y[train], results[name], ths_range=thr
+        )
 
-# Extract all the SAPS_SCORE available features
-exp_name = "CLIP_SCORE"
-features_CLIP = get_features(exp_name)
-X_CLIP_SCORE = get_data_from_features(patient_info, features_CLIP)
+        # Label-permutation control
+        for rpn in range(n_label_permutations):
+            clf_permuted = LogisticRegression().fit(x[train, None], rng.permutation(Y[train]))
+            prob_permuted = clf_permuted.predict_proba(x[test, None])[:, 1]
+            results[name] = compute_results(
+                i_fold, f"{name}_Score_test", prob_permuted, Y[test], results[name],
+                rs=True, rpn=rpn, ths_range=thr,
+            )
 
-# %%
-kf_out = RepeatedStratifiedKFold(n_splits=out_n_splits,
-                                 n_repeats=out_n_repetitions,
-                                 random_state=random_state)
-
-
-kf_inner = StratifiedKFold(n_splits=inner_n_splits,
-                           shuffle=True,
-                           random_state=random_state)
-
-score_clf = LogisticRegression()
-
-results_by_fold = []
-
-# Outer loop
-for rs in random_permutation:
-    print("Randoms State: " + str(rs))
-    for i_fold, (train_index, test_index) in enumerate(kf_out.split(X_IABP_SCORE, Y_loop)):       # noqa
-        print("FOLD: " + str(i_fold))
-        if rs:
-            rnd_permutation_loop = random_permutation_number
-        else:
-            rnd_permutation_loop = 1
-
-        for rpn in range(rnd_permutation_loop):
-            print("Random Permutation Nº: " + str(rpn))
-            # Patients used for train and internal XGB validation
-            X_train_SAPS_SCORE = X_SAPS_SCORE.iloc[train_index, :]
-            X_train_IABP_SCORE = X_IABP_SCORE.iloc[train_index, :]
-            X_train_CLIP_SCORE = X_CLIP_SCORE.iloc[train_index, :]
-            Y_train_whole = Y[train_index]
-
-            if rs:
-                random.shuffle(Y_train_whole)
-
-            # Patients used to generete a prediction
-            X_test_SAPS_SCORE = X_SAPS_SCORE.iloc[test_index, :]
-            X_test_IABP_SCORE = X_IABP_SCORE.iloc[test_index, :]
-            X_test_CLIP_SCORE = X_CLIP_SCORE.iloc[test_index, :]
-
-            Y_test = Y[test_index]
-
-            print("Fitting logit using IABP score")
-            # Train a loggistic model using the IABP score
-            X_train_IABP_SCORE_drop = X_train_IABP_SCORE.dropna()
-            Y_train_IABP = Y[X_train_IABP_SCORE_drop.index]
-            if rs:
-                random.shuffle(Y_train_IABP)
-            score_clf.fit(X=X_train_IABP_SCORE_drop, y=Y_train_IABP)
-            X_test_IABP_SCORE = X_test_IABP_SCORE.dropna()
-            Y_test_IABP = Y[X_test_IABP_SCORE.index]
-
-            IABP_SCORE_proba = score_clf.predict_proba(X=X_test_IABP_SCORE)[:, 1]                    # noqa
-
-            print("Fitting logit using SAPS score")
-            # Train a loggistic model using the SAPS score
-            X_train_SAPS_SCORE_drop = X_train_SAPS_SCORE.dropna()
-            Y_train_SAPS = Y[X_train_SAPS_SCORE_drop.index]
-            if rs:
-                random.shuffle(Y_train_SAPS)
-            score_clf.fit(X=X_train_SAPS_SCORE_drop, y=Y_train_SAPS)
-            X_test_SAPS_SCORE = X_test_SAPS_SCORE.dropna()
-            Y_test_SAPS = Y[X_test_SAPS_SCORE.index]
-
-            SAPS_SCORE_proba = score_clf.predict_proba(X=X_test_SAPS_SCORE)[:, 1]                    # noqa
-
-            print("Fitting logit using CLIP score")
-            # Train a loggistic model using the SAPS score
-            X_train_CLIP_SCORE_drop = X_train_CLIP_SCORE.dropna()
-            Y_train_CLIP = Y[X_train_CLIP_SCORE_drop.index]
-            if rs:
-                random.shuffle(Y_train_CLIP)
-            score_clf.fit(X=X_train_CLIP_SCORE_drop, y=Y_train_CLIP)
-            X_test_CLIP_SCORE = X_test_CLIP_SCORE.dropna()
-            Y_test_CLIP = Y[X_test_CLIP_SCORE.index]
-
-            CLIP_SCORE_proba = score_clf.predict_proba(X=X_test_CLIP_SCORE)[:, 1]                    # noqa
-
-            # Store results
-            results_by_fold = compute_results(i_fold, "SAPS_SCORE", rs, rpn, SAPS_SCORE_proba, Y_test_SAPS, thr, results_by_fold)                                           # noqa
-            results_by_fold = compute_results(i_fold, "IABP_SCORE", rs, rpn, IABP_SCORE_proba, Y_test_IABP, thr, results_by_fold)                                           # noqa
-            results_by_fold = compute_results(i_fold, "CLIP_SCORE", rs, rpn, CLIP_SCORE_proba, Y_test_CLIP, thr, results_by_fold)                                           # noqa
-
-
-results_df = pd.DataFrame(results_by_fold, columns=["Fold",
-                                                    "Model",
-                                                    "Random State",
-                                                    "Random Permutation",
-                                                    "Balanced ACC",
-                                                    "AUC",
-                                                    "F1",
-                                                    "Specificity",
-                                                    "Sensitivity"])
-
-# % Savng results
+# %% Saving results
 print("Saving Results")
-save_dir = "/home/nnieto/Nico/MODS_project/CULPRIT_project/output/10x10/v2/"
-results_df.to_csv(save_dir+ "metrics_10x10_true_and_random_labels_scores_v3.csv")   # noqa
+for name in SCORES:
+    results_to_df(results[name]).to_csv(save_dir / f"{name}.csv")
+    save_fold_predictions(save_dir, name, oof[name]["pred"], oof[name]["y"], oof[name]["id"])
 print("Experiment done")
 
 # %%

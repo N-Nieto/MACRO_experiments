@@ -7,6 +7,7 @@ from lib.eICU_data_loading import (
     load_eicu_mechanical_ventilation,
     load_eicu_patient_information,
 )
+from lib.eICU_features import first_day_minimum_vitals
 from lib.eICU_processing import eICU_filter_CS_patients
 from lib.paths import EICU_DIR, EICU_PREPROCESSED_DIR
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
@@ -98,37 +99,20 @@ max_BUN = max_BUN.loc[:, ["patientunitstayid", "max_BUN_bool"]]
 # Merge the features with the targets and information
 patient_BOSMAN = pd.merge(patient_BOSMAN, max_BUN, how="outer")
 patient_BOSMAN = patient_BOSMAN.dropna(subset="hospitaldischargestatus")
-# %% Cardiac data
-
-usecols = ["patientunitstayid", "observationoffset",
-           "systemicsystolic", "sao2"]
-
-# Load the data
-heart_data = pd.read_csv(root_dir + "vitalPeriodic.csv.gz",
-                         usecols=usecols)
-
-# Select the information of the selected patients to improve
-# the computational time
+# %% Cardiac data: lowest systolic BP and SpO2 in the first 24 h from all
+# eICU sources (invasive and non-invasive BP, monitor and charted SpO2), after
+# removing artefacts (lib/eICU_features.first_day_minimum_vitals). Before, only
+# invasive BP was used and monitor artefacts (e.g. SpO2 0 %) were kept.
 selected_patients = patient_BOSMAN["patientunitstayid"].tolist()
+heart_data = first_day_minimum_vitals(root_dir, selected_patients).reset_index()
 
-heart_data = heart_data[heart_data["patientunitstayid"].isin(selected_patients)]          
+# Compute the O2 saturation condition
+min_sa02_bool = heart_data.loc[:, ["patientunitstayid", "min_spo2"]].dropna()
+min_sa02_bool["min_sa02_bool"] = (min_sa02_bool["min_spo2"] < 88).astype(int)
 
-heart_data = heart_data[heart_data['observationoffset'] < 1440]
-
-heart_data = heart_data.groupby("patientunitstayid").min().reset_index()
-# %%
-# Compute the 02 saturation condition
-min_sa02_bool = heart_data.loc[:, ["patientunitstayid", "sao2"]]
-min_sa02_bool["min_sa02_bool"] = 88 > heart_data["sao2"]
-min_sa02_bool = min_sa02_bool.dropna(subset="min_sa02_bool")
-min_sa02_bool["min_sa02_bool"] = min_sa02_bool["min_sa02_bool"].astype(int)
-
-# Compute the Sysolic preassure condition
-min_sys_bool = heart_data.loc[:, ["patientunitstayid", "systemicsystolic"]]
-min_sys_bool["min_sys_bool"] = 80 > heart_data["systemicsystolic"]
-min_sys_bool = min_sys_bool.dropna(subset="min_sys_bool")
-
-min_sys_bool["min_sys_bool"] = min_sys_bool["min_sys_bool"].astype(int)
+# Compute the systolic pressure condition
+min_sys_bool = heart_data.loc[:, ["patientunitstayid", "min_sbp"]].dropna()
+min_sys_bool["min_sys_bool"] = (min_sys_bool["min_sbp"] < 80).astype(int)
 # %% Add the information to the patients
 min_sa02_bool = min_sa02_bool.loc[:, ["patientunitstayid", "min_sa02_bool"]]
 
