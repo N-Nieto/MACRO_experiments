@@ -27,6 +27,7 @@ from lib.data_load_utils import get_data_from_features, load_CULPRIT_data, load_
 from lib.data_processing import remove_low_variance_features
 from lib.experiment_config import VARIANCE_THS, model_cohort
 from lib.experiment_definitions import get_features
+from lib.feature_names import feature_label
 from lib.paths import CULPRIT_DIR, DATA_DIR, OUTPUT_DIR
 from lib.utils import ensure_dir
 
@@ -38,16 +39,6 @@ COHORTS = ("CULPRIT-SHOCK", "eICU")
 COLORS = {"CULPRIT-SHOCK": "#257de0", "eICU": "#f47230"}  # validated categorical pair
 TEXT, MUTED, GRID = "#191919", "#666666", "#e6e6e6"
 MIN_GROUP = 10  # groups with fewer values are not drawn
-
-
-def feature_labels(data_dir: Path, features: list[str]) -> dict[str, str]:
-    """Readable names from Shorten_table.xlsx (as for the SHAP plots), else the code name."""
-    table_file = data_dir / "Shorten_table.xlsx"
-    if not table_file.exists():
-        return {f: f for f in features}
-    table = pd.read_excel(table_file, sheet_name="Sheet1", index_col=0)
-    names = dict(zip(table["NAME"], table["LABEL"]))
-    return {f: str(names.get(f, f)) for f in features}
 
 
 # %% Data
@@ -68,7 +59,8 @@ eicu = {
 in_model = set(remove_low_variance_features(culprit["Admission"].astype(float), VARIANCE_THS).columns) | set(
     remove_low_variance_features(culprit["Full"].astype(float), VARIANCE_THS).columns
 )
-labels = feature_labels(CULPRIT_DIR, get_features("24hs"))
+# Readable feature names (lib/feature_names.py, as for the SHAP plots)
+labels = {f: feature_label(f) for f in get_features("24hs")}
 
 # %% Table
 tables = []

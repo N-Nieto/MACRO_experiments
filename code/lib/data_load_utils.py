@@ -118,20 +118,6 @@ def create_unique_patient_ID(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-def load_table(data_dir: str) -> pd.DataFrame:
-    """
-    Load a table from an Excel file.
-
-    Parameters:
-        data_dir (str): The directory containing the Excel file.
-
-    Returns:
-        pd.DataFrame: The loaded DataFrame.
-    """
-    table = pd.read_excel(Path(data_dir) / "Shorten_table.xlsx", sheet_name=None, index_col=0)
-    return table["Sheet1"]
-
-
 def get_data_from_features(data: pd.DataFrame, features_code: list) -> pd.DataFrame:
     """
     Extract features from patient data.

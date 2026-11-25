@@ -1,8 +1,8 @@
 from collections.abc import Iterable
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from lib.feature_names import rename_features
 from sklearn.feature_selection import VarianceThreshold
 
 
@@ -85,48 +85,18 @@ def remove_low_variance_features(
     return data
 
 
-def naming_for_shap(data_dir: Path, data: pd.DataFrame) -> pd.DataFrame:
+def naming_for_shap(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Rename columns of a DataFrame based on a mapping provided in an Excel file.
+    Rename the feature columns to their readable names for the SHAP analyses
+    and plots (lib/feature_names.py; formerly read from Shorten_table.xlsx).
 
     Parameters:
-    - data_dir (str): The directory containing the Excel file with the column mapping.
     - data (pd.DataFrame): The DataFrame whose columns need to be renamed.
 
     Returns:
     - pd.DataFrame: The DataFrame with renamed columns.
     """
-
-    # Read the Excel file into a DataFrame
-    table = pd.read_excel(data_dir / "Shorten_table.xlsx", sheet_name=None, index_col=0)
-
-    # Specific sheet to use
-    table = table["Sheet1"]
-
-    # Create a dictionary for column name mapping
-    name_mapping = dict(zip(table["NAME"], table["LABEL"]))
-
-    # Rename columns based on the mapping
-    data = data.rename(columns=name_mapping)
-
-    # Replace spaces with underscores
-    data.columns = data.columns.str.replace(" ", "_")
-
-    # Replace commas with underscores
-    data.columns = data.columns.str.replace(",", "_")
-
-    # Replace square brackets with parentheses
-    data.columns = data.columns.str.replace("[", "(")
-    data.columns = data.columns.str.replace("]", ")")
-
-    # Replace '<' with 'less'
-    data.columns = data.columns.str.replace("<", "less")
-
-    # Replace consecutive underscores with a single underscore
-    data.columns = data.columns.str.replace("_-_", "_", regex=True)
-    data.columns = data.columns.str.replace("__", "_", regex=True)
-
-    return data
+    return rename_features(data)
 
 
 def remove_random_features_fix_number(

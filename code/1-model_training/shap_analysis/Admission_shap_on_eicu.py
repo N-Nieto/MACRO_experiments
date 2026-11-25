@@ -49,8 +49,8 @@ X, Y, patient_ids = get_model_data(patient_info, "Admission")
 # Load eICU with the CULPRIT column names, THEN rename both for SHAP
 # (aligning after renaming left every eICU feature NaN)
 X_eicu, Y_test_eicu = load_eICU(eicu_data_dir, "Admission", X, outcome=eicu_outcome)
-X = naming_for_shap(data_dir, X)
-X_eicu = naming_for_shap(data_dir, X_eicu)
+X = naming_for_shap(X)
+X_eicu = naming_for_shap(X_eicu)
 
 # %%
 kf_inner = StratifiedKFold(n_splits=INNER_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)

@@ -74,7 +74,7 @@ for list_to_save, save_name in [
         pickle.dump(list_to_save, fp)
 
 # Feature names for the plots
-naming_for_shap(data_dir, X).to_csv(save_dir / "X_Admission.csv")
+naming_for_shap(X).to_csv(save_dir / "X_Admission.csv")
 pd.Series(Y, index=X.index, name="fu_ce_death_le30d_yn").to_csv(save_dir / "Y_Admission.csv")
 pd.DataFrame([list(p) for p in shap_cv["predictions"]]).T.to_csv(save_dir / "predictions_Admission_shap.csv")
 joblib.dump(shap_cv["last_model"], save_dir / "model_Admission_shap_values.pkl")

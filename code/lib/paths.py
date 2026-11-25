@@ -5,7 +5,7 @@ Default layout (the repository sits two levels below the project folder):
 
     MODS_project/
         data/
-            CULPRIT/                                    CULPRIT-data_20210407.xlsx, Shorten_table.xlsx
+            CULPRIT/                                    CULPRIT-data_20210407.xlsx
             eicu-collaborative-research-database-2.0/   raw eICU tables
                 preprocessed_MACRO/                     written by eICU_extract_CS_patients.py
         CULPRIT_project/
